@@ -197,7 +197,7 @@ class Participant
         return array_column($st->fetchAll(), 'discipline_id');
     }
 
-    public static function allWithDisciplines(?string $status = null, string $q = ''): array
+    public static function allWithDisciplines(?string $status = null, string $q = '', ?int $disciplineId = null): array
     {
         $sql = 'SELECT p.*,
                        GROUP_CONCAT(CONCAT(d.name_ru, IF(r.weight_category IS NOT NULL AND r.weight_category != "", CONCAT(" (", r.weight_category, ")"), "")) ORDER BY d.sort_order SEPARATOR ", ") AS disciplines
@@ -217,6 +217,13 @@ class Participant
             $params[] = $like;
             $params[] = $like;
         }
+        if ($disciplineId !== null && $disciplineId > 0) {
+            $where[] = 'EXISTS (
+                SELECT 1 FROM registrations rx
+                WHERE rx.participant_id = p.id AND rx.discipline_id = ?
+            )';
+            $params[] = $disciplineId;
+        }
 
         if ($where) {
             $sql .= ' WHERE ' . implode(' AND ', $where);
@@ -231,6 +238,32 @@ class Participant
         $st = Database::pdo()->prepare($sql);
         $st->execute($params);
         return $st->fetchAll();
+    }
+
+    /** Счётчики новых заявок по дисциплинам. */
+    public static function pendingDisciplineCounts(): array
+    {
+        $st = Database::pdo()->prepare(
+            'SELECT d.id, d.name_ru, d.code,
+                    COUNT(DISTINCT p.id) AS total
+             FROM disciplines d
+             LEFT JOIN registrations r ON r.discipline_id = d.id
+             LEFT JOIN participants p ON p.id = r.participant_id AND p.status = ?
+             GROUP BY d.id, d.name_ru, d.code, d.sort_order
+             ORDER BY d.sort_order'
+        );
+        $st->execute([self::STATUS_PENDING]);
+
+        $out = [];
+        foreach ($st->fetchAll() as $row) {
+            $out[] = [
+                'id'      => (int) $row['id'],
+                'name_ru' => (string) $row['name_ru'],
+                'code'    => (string) $row['code'],
+                'count'   => (int) $row['total'],
+            ];
+        }
+        return $out;
     }
 
     public static function update(int $id, array $data, array $disciplineIds, array $disciplineCategories = []): void
