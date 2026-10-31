@@ -64,12 +64,6 @@ $statusHref = static function (string $key) use ($base, $q): string {
     </form>
 
     <nav class="admin-dash-nav" aria-label="Действия">
-      <?php if (!empty($canDeploy)): ?>
-        <form method="post" action="<?= htmlspecialchars($base) ?>/admin/deploy"
-              onsubmit="this.querySelector('button').disabled=true; this.querySelector('button').textContent='…';">
-          <button class="btn-primary-sm" type="submit">Деплой</button>
-        </form>
-      <?php endif; ?>
       <a class="btn-secondary-sm" href="<?= htmlspecialchars($base) ?>/admin/users">Юзеры</a>
       <a class="btn-secondary-sm" href="<?= htmlspecialchars($base) ?>/register">+</a>
       <a class="btn-secondary-sm" href="<?= htmlspecialchars($base) ?>/admin/logout">Выйти</a>

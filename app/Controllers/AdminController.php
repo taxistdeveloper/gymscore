@@ -7,7 +7,6 @@ use App\Core\Database;
 use App\Models\Discipline;
 use App\Models\Participant;
 use App\Models\StaffAccount;
-use App\Services\Deployer;
 
 class AdminController extends Controller
 {
@@ -73,39 +72,8 @@ class AdminController extends Controller
             'q'            => $q,
             'flash'        => $this->takeFlash(),
             'adminName'    => $_SESSION['admin_name'] ?? 'Админ',
-            'canDeploy'    => Deployer::isLocal(),
             'wide'         => true,
         ]);
-    }
-
-    public function deploy(): void
-    {
-        $this->requireAdmin();
-
-        if (!Deployer::isLocal()) {
-            $this->flash('danger', 'Деплой доступен только с локальной машины');
-            $this->redirect('/admin');
-        }
-
-        $deployFile = dirname(__DIR__) . '/config/deploy.php';
-        if (!is_file($deployFile)) {
-            $this->flash('danger', 'Нет файла app/config/deploy.php');
-            $this->redirect('/admin');
-        }
-
-        $result = Deployer::run(require $deployFile);
-        $detail = trim((string) ($result['output'] ?? ''));
-        // важнее начало лога (Upload / Extract), а не хвост ls
-        if (mb_strlen($detail) > 2500) {
-            $detail = mb_substr($detail, 0, 2500) . "\n…";
-        }
-
-        $this->flash(
-            $result['ok'] ? 'success' : 'danger',
-            $result['message'],
-            $detail !== '' ? ['detail' => $detail] : []
-        );
-        $this->redirect('/admin');
     }
 
     public function editForm(string $id): void

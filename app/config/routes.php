@@ -35,7 +35,6 @@ $router->get('/admin/login', [AdminController::class, 'loginForm']);
 $router->post('/admin/login', [AdminController::class, 'login']);
 $router->get('/admin/logout', [AdminController::class, 'logout']);
 $router->get('/admin', [AdminController::class, 'dashboard']);
-$router->post('/admin/deploy', [AdminController::class, 'deploy']);
 $router->get('/admin/participants/{id}', [AdminController::class, 'editForm']);
 $router->post('/admin/participants/{id}', [AdminController::class, 'update']);
 $router->post('/admin/participants/{id}/status', [AdminController::class, 'setStatus']);

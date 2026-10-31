@@ -8,22 +8,6 @@
     });
   }
 
-  function closeDeployModal(modal) {
-    if (!modal) return;
-    modal.classList.add('hidden');
-    var input = modal.querySelector('#deploySshPassword');
-    if (input) input.value = '';
-  }
-
-  function openDeployModal(modal) {
-    if (!modal) return;
-    modal.classList.remove('hidden');
-    var input = modal.querySelector('#deploySshPassword');
-    if (input) {
-      setTimeout(function () { input.focus(); }, 20);
-    }
-  }
-
   document.addEventListener('click', function (e) {
     var dismiss = e.target.closest('[data-dismiss="alert"]');
     if (dismiss) {
@@ -35,35 +19,14 @@
       return;
     }
 
-    var openBtn = e.target.closest('[data-deploy-open]');
-    if (openBtn) {
-      openDeployModal(document.querySelector('[data-deploy-modal]'));
-      return;
-    }
-
-    var closeBtn = e.target.closest('[data-deploy-close]');
-    if (closeBtn) {
-      closeDeployModal(closeBtn.closest('[data-deploy-modal]'));
-      return;
-    }
-
     var modal = e.target.closest('[data-app-modal]');
     if (modal && e.target === modal) {
-      if (modal.hasAttribute('data-deploy-modal')) {
-        closeDeployModal(modal);
-      } else {
-        modal.remove();
-      }
+      modal.remove();
     }
   });
 
   document.addEventListener('keydown', function (e) {
     if (e.key !== 'Escape') return;
-    var deployModal = document.querySelector('[data-deploy-modal]:not(.hidden)');
-    if (deployModal) {
-      closeDeployModal(deployModal);
-      return;
-    }
     var openModal = document.querySelector('[data-app-modal]');
     if (openModal) openModal.remove();
   });
