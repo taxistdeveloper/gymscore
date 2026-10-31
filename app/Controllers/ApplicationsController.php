@@ -17,15 +17,21 @@ class ApplicationsController extends Controller
             $disciplineId = 0;
         }
 
-        $totalPending = count(Participant::allWithDisciplines(Participant::STATUS_PENDING));
+        $participants = Participant::allWithDisciplines(
+            Participant::STATUS_PENDING,
+            '',
+            $disciplineId > 0 ? $disciplineId : null
+        );
+
+        $totalPending = $disciplineId === 0
+            ? count($participants)
+            : count(Participant::allWithDisciplines(Participant::STATUS_PENDING));
 
         $this->view('applications/index', [
             'disciplines'  => $disciplines,
             'discipline'   => $discipline,
             'disciplineId' => $disciplineId,
-            'participants' => $disciplineId > 0
-                ? Participant::allWithDisciplines(Participant::STATUS_PENDING, '', $disciplineId)
-                : [],
+            'participants' => $participants,
             'totalPending' => $totalPending,
         ]);
     }

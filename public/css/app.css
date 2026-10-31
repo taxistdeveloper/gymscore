@@ -3027,6 +3027,10 @@ dialog::backdrop {
   font-weight: 600;
 }
 
+.apps-tabs {
+  margin-bottom: 0.25rem;
+}
+
 .results-head {
   display: flex;
   flex-wrap: wrap;
