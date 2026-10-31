@@ -20,10 +20,11 @@ return [
     'apps.col_group' => 'Топ',
     'apps.col_birth' => 'Т.ж.',
     'apps.col_disciplines' => 'Пәндер',
+    'apps.col_category' => 'Санат',
     'apps.gender_m' => 'Е',
     'apps.gender_f' => 'Ә',
     'apps.group_juniors' => 'Юниорлар',
-    'apps.group_open' => 'Open',
+    'apps.group_open' => 'Ашық',
 
     'theme.toggle' => 'Фонды ауыстыру',
     'theme.light' => 'Жарық',

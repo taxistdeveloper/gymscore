@@ -20,10 +20,11 @@ return [
     'apps.col_group' => 'Группа',
     'apps.col_birth' => 'Г.р.',
     'apps.col_disciplines' => 'Дисциплины',
+    'apps.col_category' => 'Категория',
     'apps.gender_m' => 'М',
     'apps.gender_f' => 'Ж',
     'apps.group_juniors' => 'Юниоры',
-    'apps.group_open' => 'Open',
+    'apps.group_open' => 'Открытая',
 
     'theme.toggle' => 'Переключить фон',
     'theme.light' => 'Светлый',

@@ -266,6 +266,67 @@ class Participant
         return $out;
     }
 
+    /**
+     * Новые заявки, сгруппированные по дисциплинам (порядок sort_order).
+     * Участник с несколькими дисциплинами попадает в каждую группу.
+     *
+     * @return list<array{id:int,name_ru:string,code:string,participants:list<array>}>
+     */
+    public static function pendingGroupedByDiscipline(?int $disciplineId = null): array
+    {
+        $sql = 'SELECT d.id AS discipline_id, d.name_ru AS discipline_name, d.code AS discipline_code,
+                       p.*,
+                       r.weight_category AS reg_weight_category
+                FROM disciplines d
+                INNER JOIN registrations r ON r.discipline_id = d.id
+                INNER JOIN participants p ON p.id = r.participant_id AND p.status = ?
+                WHERE 1 = 1';
+        $params = [self::STATUS_PENDING];
+
+        if ($disciplineId !== null && $disciplineId > 0) {
+            $sql .= ' AND d.id = ?';
+            $params[] = $disciplineId;
+        }
+
+        $sql .= ' ORDER BY d.sort_order,
+                         FIELD(IFNULL(p.age_group, ""), "juniors", "open"),
+                         p.created_at DESC,
+                         p.full_name';
+
+        $st = Database::pdo()->prepare($sql);
+        $st->execute($params);
+
+        $groups = [];
+        foreach ($st->fetchAll() as $row) {
+            $did = (int) $row['discipline_id'];
+            if (!isset($groups[$did])) {
+                $groups[$did] = [
+                    'id'           => $did,
+                    'name_ru'      => (string) $row['discipline_name'],
+                    'code'         => (string) $row['discipline_code'],
+                    'participants' => [],
+                    'by_age'       => [
+                        'juniors' => [],
+                        'open'    => [],
+                        'other'   => [],
+                    ],
+                ];
+            }
+            $cat = trim((string) ($row['reg_weight_category'] ?? ''));
+            $row['disciplines'] = $cat !== '' ? $cat : '—';
+            $groups[$did]['participants'][] = $row;
+
+            $age = (string) ($row['age_group'] ?? '');
+            if ($age === 'juniors' || $age === 'open') {
+                $groups[$did]['by_age'][$age][] = $row;
+            } else {
+                $groups[$did]['by_age']['other'][] = $row;
+            }
+        }
+
+        return array_values($groups);
+    }
+
     public static function update(int $id, array $data, array $disciplineIds, array $disciplineCategories = []): void
     {
         $pdo = Database::pdo();
