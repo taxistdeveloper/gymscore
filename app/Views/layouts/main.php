@@ -21,6 +21,7 @@ $t = $t ?? static fn (string $key, ?string $fallback = null): string => Lang::t(
 $nav = [
     '/' => [$t('nav.home'), $base . '/'],
     '/register' => [$t('nav.register'), $base . '/register'],
+    '/applications' => [$t('nav.applications'), $base . '/applications'],
     '/live' => [$t('nav.live'), $base . '/live'],
     '/judge' => [$t('nav.judge'), $base . '/judge'],
     '/admin' => [$t('nav.admin'), $base . '/admin'],
@@ -34,10 +35,11 @@ $flashTone = [
 ][$flashType] ?? 'alert-warning';
 $isHome = ($path === '/');
 $isRegister = str_starts_with($path, '/register');
+$isApplications = str_starts_with($path, '/applications');
 $isAdminLogin = ($path === '/admin/login');
 $isJudgeLogin = ($path === '/judge/login');
 $isAuthLogin = $isAdminLogin || $isJudgeLogin;
-$hideChromeHeader = $isHome || $isRegister || $isAuthLogin;
+$hideChromeHeader = $isHome || $isRegister || $isApplications || $isAuthLogin;
 $hideFooter = $isAuthLogin;
 $themeToggle = static function () use ($t): void { ?>
   <button type="button" class="theme-toggle" data-theme-toggle aria-pressed="false" aria-label="<?= htmlspecialchars($t('theme.toggle')) ?>">

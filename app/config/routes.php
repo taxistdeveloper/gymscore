@@ -2,6 +2,7 @@
 
 use App\Controllers\HomeController;
 use App\Controllers\RegisterController;
+use App\Controllers\ApplicationsController;
 use App\Controllers\JudgeController;
 use App\Controllers\AdminController;
 use App\Controllers\BoardController;
@@ -13,6 +14,8 @@ $router->get('/', [HomeController::class, 'index']);
 
 $router->get('/register', [RegisterController::class, 'form']);
 $router->post('/register', [RegisterController::class, 'store']);
+
+$router->get('/applications', [ApplicationsController::class, 'index']);
 
 $router->get('/judge/login', [JudgeController::class, 'loginForm']);
 $router->post('/judge/login', [JudgeController::class, 'login']);
