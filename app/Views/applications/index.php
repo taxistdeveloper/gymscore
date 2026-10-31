@@ -2,13 +2,12 @@
 
 use App\Lang\Lang;
 
-$base = $config['base_url'] ?? '';
 $t = $t ?? static fn(string $key, ?string $fallback = null): string => Lang::t($key, $fallback);
 $participants = $participants ?? [];
 $count = count($participants);
 ?>
 
-<div class="apps-container mx-auto w-full max-w-6xl px-4 py-8">
+<div class="apps-container mx-auto w-full max-w-[90rem] px-4 py-8 lg:px-6">
   <section class="apps-list">
     <header class="apps-list-head">
       <div>
@@ -20,7 +19,6 @@ $count = count($participants);
           <?php endif; ?>
         </p>
       </div>
-      <a class="btn-primary-sm" href="<?= htmlspecialchars($base) ?>/register"><?= htmlspecialchars($t('apps.register')) ?></a>
     </header>
 
     <?php if ($count === 0): ?>
