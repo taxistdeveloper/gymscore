@@ -1,0 +1,6 @@
+node_modules/
+.deploy-out.txt
+.deploy-err.txt
+.deploy-upload.tar
+app/config/deploy.local.php
+composer.phar

@@ -1,0 +1,13 @@
+{
+  "name": "sport",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "css": "tailwindcss -i ./assets/tailwind.css -o ./public/css/tailwind.css --minify",
+    "css:watch": "tailwindcss -i ./assets/tailwind.css -o ./public/css/tailwind.css --watch"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.3.3",
+    "tailwindcss": "^4.3.3"
+  }
+}
