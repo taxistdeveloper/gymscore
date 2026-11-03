@@ -71,6 +71,24 @@ $langSwitch = static function () use ($lang): void { ?>
   <title><?= htmlspecialchars($config['app_name'] ?? 'Alash Gym') ?></title>
   <?php if ($isLivePage): ?>
   <link href="<?= htmlspecialchars($base) ?>/css/live.css?v=<?= (int) $liveCssV ?>" rel="stylesheet">
+  <style>
+    /* Critical TV fallback if external CSS is cached/partial */
+    button{-webkit-appearance:none;appearance:none}
+    .live-body{margin:0;min-height:100vh;background:#f3f3f3;color:#0a0a0a;font-family:Arial,Helvetica,sans-serif}
+    .live-board{padding:16px 18px}
+    .live-grid{overflow:hidden}
+    .live-now{float:left;width:64%;margin-right:2%}
+    .live-side{float:left;width:34%}
+    .live-now,.live-panel{background:#fff;border:2px solid #ccc;border-radius:8px;padding:20px}
+    .live-panel{margin-bottom:14px}
+    .live-name{font-size:56px;font-weight:700;line-height:1.05;margin:10px 0}
+    .live-weight{font-size:96px;font-weight:800;line-height:.92}
+    .live-disc-chip,.live-exit{display:inline-block;border:2px solid #999;background:#fff;color:#111;border-radius:6px;padding:10px 14px;font-weight:700;text-decoration:none;margin:0 6px 6px 0}
+    .live-disc-chip.is-active{background:#e10600!important;border-color:#e10600!important;color:#fff!important}
+    .live-now-badge{display:inline-block;background:#e10600;color:#fff;border-radius:4px;padding:6px 12px;font-weight:700}
+    .live-brand-name{font-size:28px;font-weight:700}
+    .live-brand-name em{font-style:normal;color:#e10600}
+  </style>
   <?php else: ?>
   <?php if ($isHome): ?>
   <link rel="preconnect" href="https://fonts.googleapis.com">
