@@ -5,7 +5,9 @@ $base = $config['base_url'] ?? '';
 $assetRoot = dirname(__DIR__, 3) . DIRECTORY_SEPARATOR . 'public';
 $twV = @filemtime($assetRoot . DIRECTORY_SEPARATOR . 'css' . DIRECTORY_SEPARATOR . 'tailwind.css') ?: 1;
 $appV = @filemtime($assetRoot . DIRECTORY_SEPARATOR . 'css' . DIRECTORY_SEPARATOR . 'app.css') ?: 1;
+$liveCssV = @filemtime($assetRoot . DIRECTORY_SEPARATOR . 'css' . DIRECTORY_SEPARATOR . 'live.css') ?: 1;
 $uiV = @filemtime($assetRoot . DIRECTORY_SEPARATOR . 'js' . DIRECTORY_SEPARATOR . 'ui.js') ?: 1;
+$isLivePage = !empty($live);
 $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
 if ($base && str_starts_with($path, $base)) {
     $path = substr($path, strlen($base)) ?: '/';
@@ -67,6 +69,9 @@ $langSwitch = static function () use ($lang): void { ?>
     } catch (e) {}
   </script>
   <title><?= htmlspecialchars($config['app_name'] ?? 'Alash Gym') ?></title>
+  <?php if ($isLivePage): ?>
+  <link href="<?= htmlspecialchars($base) ?>/css/live.css?v=<?= (int) $liveCssV ?>" rel="stylesheet">
+  <?php else: ?>
   <?php if ($isHome): ?>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -74,9 +79,10 @@ $langSwitch = static function () use ($lang): void { ?>
   <?php endif; ?>
   <link href="<?= htmlspecialchars($base) ?>/css/tailwind.css?v=<?= (int) $twV ?>" rel="stylesheet">
   <link href="<?= htmlspecialchars($base) ?>/css/app.css?v=<?= (int) $appV ?>" rel="stylesheet">
+  <?php endif; ?>
 </head>
-<body class="<?= !empty($live) ? 'live-body' : 'min-h-screen bg-canvas font-sans text-ink antialiased' ?><?= $hideChromeHeader && empty($live) ? ' home-page' : '' ?>">
-<?php if (empty($live) && !$hideChromeHeader): ?>
+<body class="<?= $isLivePage ? 'live-body' : 'min-h-screen bg-canvas font-sans text-ink antialiased' ?><?= $hideChromeHeader && !$isLivePage ? ' home-page' : '' ?>">
+<?php if (!$isLivePage && !$hideChromeHeader): ?>
 <header class="sticky top-0 z-40 border-b-[3px] border-signal bg-chrome text-on-chrome">
   <div class="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3">
     <a class="order-1 flex items-center gap-2.5 text-lg font-semibold tracking-tight text-on-chrome no-underline" href="<?= htmlspecialchars($base) ?>/">
