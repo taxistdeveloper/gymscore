@@ -1,8 +1,14 @@
 <?php
 $base = $config['base_url'] ?? '';
 $disciplineId = (int) ($disciplineId ?? 0);
+$boot = is_array($boot ?? null) ? $boot : ['ok' => false];
+$bootJson = json_encode($boot, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS);
+if ($bootJson === false) {
+    $bootJson = '{"ok":false}';
+}
 ?>
 
+<script type="application/json" id="liveBoot"><?= $bootJson ?></script>
 <div class="live-board" id="liveBoard"
      data-base="<?= htmlspecialchars($base) ?>"
      data-discipline="<?= $disciplineId ?>">
@@ -117,4 +123,4 @@ $disciplineId = (int) ($disciplineId ?? 0);
   </div>
 </div>
 
-<script src="<?= htmlspecialchars($base) ?>/js/live-board.js"></script>
+<script src="<?= htmlspecialchars($base) ?>/js/live-board.js?v=<?= (int) (@filemtime(dirname(__DIR__, 3) . '/public/js/live-board.js') ?: 1) ?>"></script>

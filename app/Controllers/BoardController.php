@@ -23,6 +23,7 @@ class BoardController extends Controller
         $this->view('board/live', [
             'disciplines'  => $disciplines,
             'disciplineId' => $disciplineId,
+            'boot'         => $this->payload($disciplineId),
             'wide'         => true,
             'live'         => true,
             'flash'        => null,
@@ -33,10 +34,17 @@ class BoardController extends Controller
     {
         $disciplines = Discipline::all();
         $disciplineId = (int) ($_GET['discipline'] ?? ($disciplines[0]['id'] ?? 0));
+        $this->json($this->payload($disciplineId));
+    }
+
+    /** @return array<string, mixed> */
+    private function payload(int $disciplineId): array
+    {
+        $disciplines = Discipline::all();
         $discipline = Discipline::find($disciplineId) ?? $disciplines[0] ?? null;
 
         if (!$discipline) {
-            $this->json(['ok' => false, 'error' => 'no_discipline']);
+            return ['ok' => false, 'error' => 'no_discipline'];
         }
 
         $did = (int) $discipline['id'];
@@ -82,7 +90,7 @@ class BoardController extends Controller
                 ];
             }, $upcomingMatches);
 
-            $this->json([
+            return [
                 'ok' => true,
                 'ts' => time(),
                 'discipline' => [
@@ -118,7 +126,7 @@ class BoardController extends Controller
                 'bar'      => null,
                 'upcoming' => $upcoming,
                 'ranking'  => $board,
-            ]);
+            ];
         }
 
         $queue = PlatformQueue::forDiscipline($did);
@@ -151,11 +159,13 @@ class BoardController extends Controller
                 $bar = [
                     'per_side' => $loaded['per_side'],
                     'plates'   => array_map(
-                        static fn (array $p) => [
-                            'label' => $p['label'],
-                            'color' => $p['color'],
-                            'dark'  => !empty($p['dark']),
-                        ],
+                        static function (array $p) {
+                            return [
+                                'label' => $p['label'],
+                                'color' => $p['color'],
+                                'dark'  => !empty($p['dark']),
+                            ];
+                        },
                         $loaded['plates']
                     ),
                 ];
@@ -193,7 +203,7 @@ class BoardController extends Controller
             ];
         }
 
-        $this->json([
+        return [
             'ok' => true,
             'ts' => time(),
             'discipline' => [
@@ -221,7 +231,7 @@ class BoardController extends Controller
             'bar'         => $bar,
             'upcoming'    => $upcoming,
             'ranking'     => $board,
-        ]);
+        ];
     }
 
     private function json(array $payload): void

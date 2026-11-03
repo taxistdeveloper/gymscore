@@ -23,6 +23,79 @@
       .replace(/"/g, '&quot;');
   }
 
+  function findChip(el) {
+    while (el && el !== discPick) {
+      if (el.className && (' ' + el.className + ' ').indexOf(' live-disc-chip ') !== -1) {
+        return el;
+      }
+      el = el.parentNode;
+    }
+    return null;
+  }
+
+  function setDisciplineUrl(id) {
+    try {
+      var href = window.location.href;
+      var hash = '';
+      var hashPos = href.indexOf('#');
+      if (hashPos !== -1) {
+        hash = href.substring(hashPos);
+        href = href.substring(0, hashPos);
+      }
+      var qPos = href.indexOf('?');
+      var path = qPos === -1 ? href : href.substring(0, qPos);
+      var query = qPos === -1 ? '' : href.substring(qPos + 1);
+      var parts = query ? query.split('&') : [];
+      var out = [];
+      var replaced = false;
+      for (var i = 0; i < parts.length; i++) {
+        if (!parts[i]) continue;
+        if (parts[i].indexOf('discipline=') === 0) {
+          out.push('discipline=' + encodeURIComponent(id));
+          replaced = true;
+        } else {
+          out.push(parts[i]);
+        }
+      }
+      if (!replaced) out.push('discipline=' + encodeURIComponent(id));
+      var next = path + '?' + out.join('&') + hash;
+      if (window.history && window.history.replaceState) {
+        window.history.replaceState({}, '', next);
+      }
+    } catch (e) {}
+  }
+
+  function getJson(url, onOk, onErr) {
+    if (typeof fetch === 'function') {
+      fetch(url, { cache: 'no-store' })
+        .then(function (r) { return r.json(); })
+        .then(onOk)
+        .catch(onErr || function () {});
+      return;
+    }
+    try {
+      var xhr = new XMLHttpRequest();
+      xhr.open('GET', url, true);
+      xhr.setRequestHeader('Accept', 'application/json');
+      xhr.onreadystatechange = function () {
+        if (xhr.readyState !== 4) return;
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try {
+            onOk(JSON.parse(xhr.responseText));
+          } catch (e) {
+            if (onErr) onErr(e);
+          }
+        } else if (onErr) {
+          onErr();
+        }
+      };
+      xhr.onerror = function () { if (onErr) onErr(); };
+      xhr.send(null);
+    } catch (e) {
+      if (onErr) onErr(e);
+    }
+  }
+
   function renderBar(bar) {
     var wrap = document.getElementById('liveBar');
     var visual = document.getElementById('liveBarVisual');
@@ -31,22 +104,27 @@
 
     if (!bar || !bar.plates) {
       wrap.hidden = true;
+      wrap.style.display = 'none';
       visual.innerHTML = '';
       return;
     }
 
     wrap.hidden = false;
+    wrap.style.display = '';
     if (perSide) {
       perSide.textContent = 'На сторону: ' + Number(bar.per_side).toFixed(2) + ' кг';
     }
 
     function platesHtml(list, reverse) {
       var items = reverse ? list.slice().reverse() : list;
-      return items.map(function (p) {
+      var html = '';
+      for (var i = 0; i < items.length; i++) {
+        var p = items[i];
         var dark = p.dark ? 'color:#111;' : '';
-        return '<span class="plate" style="--plate-color:' + esc(p.color) + ';' + dark + '">'
+        html += '<span class="plate" style="background:' + esc(p.color) + ';' + dark + '">'
           + esc(p.label) + '</span>';
-      }).join('');
+      }
+      return html;
     }
 
     visual.innerHTML =
@@ -65,6 +143,12 @@
     return parts.join(' · ');
   }
 
+  function setHidden(el, hide) {
+    if (!el) return;
+    el.hidden = !!hide;
+    el.style.display = hide ? 'none' : '';
+  }
+
   function renderReps(last, isFolkMode) {
     var block = document.getElementById('liveRepsBlock');
     var repsEl = document.getElementById('liveReps');
@@ -73,11 +157,11 @@
     if (!block || !repsEl) return;
 
     if (!isFolkMode) {
-      block.hidden = true;
+      setHidden(block, true);
       return;
     }
 
-    block.hidden = false;
+    setHidden(block, false);
     if (labelEl) labelEl.textContent = 'раз';
     if (last && last.reps != null) {
       repsEl.textContent = String(last.reps);
@@ -109,20 +193,25 @@
     var nameEl = document.getElementById('liveName');
 
     if (metrics) {
-      metrics.classList.toggle('is-reps', isReps && !isArm);
+      if (metrics.classList && metrics.classList.toggle) {
+        metrics.classList.toggle('is-reps', isReps && !isArm);
+      } else {
+        metrics.className = (metrics.className || '').replace(/\bis-reps\b/g, '');
+        if (isReps && !isArm) metrics.className += ' is-reps';
+      }
     }
 
     if (isArm && match) {
       document.getElementById('liveAttempt').textContent =
         'Раунд ' + match.round_no + ' · бой ' + match.match_no;
-      document.getElementById('liveMeta').textContent = [
-        d.name || '',
-        match.category || ''
-      ].filter(Boolean).join(' · ') || '—';
-      if (nameEl) nameEl.hidden = true;
+      var metaArm = [];
+      if (d.name) metaArm.push(d.name);
+      if (match.category) metaArm.push(match.category);
+      document.getElementById('liveMeta').textContent = metaArm.length ? metaArm.join(' · ') : '—';
+      setHidden(nameEl, true);
       document.getElementById('liveSub').textContent = '';
       if (armEl) {
-        armEl.hidden = false;
+        setHidden(armEl, false);
         document.getElementById('liveArmLeftName').textContent = match.left.full_name;
         document.getElementById('liveArmLeftMeta').textContent = fighterMeta(match.left);
         if (match.right) {
@@ -133,26 +222,24 @@
           document.getElementById('liveArmRightMeta').textContent = 'проход без боя';
         }
       }
-      if (weightBlock) weightBlock.hidden = true;
+      setHidden(weightBlock, true);
       renderReps(null, false);
       renderBar(null);
     } else {
-      if (armEl) armEl.hidden = true;
-      if (nameEl) nameEl.hidden = false;
-      if (weightBlock) weightBlock.hidden = false;
+      setHidden(armEl, true);
+      setHidden(nameEl, false);
+      setHidden(weightBlock, false);
 
       document.getElementById('liveAttempt').textContent = cur
         ? (isFolk
             ? ('Народный жим · ½ с/в')
-            : (isReps
-                ? ('Попытка ' + cur.attempt_no + ' из ' + maxA)
-                : ('Попытка ' + cur.attempt_no + ' из ' + maxA)))
+            : ('Попытка ' + cur.attempt_no + ' из ' + maxA))
         : (isArm ? 'Стол свободен' : 'Помост свободен');
 
-      document.getElementById('liveMeta').textContent = [
-        d.name || '',
-        cur && cur.category ? cur.category : ''
-      ].filter(Boolean).join(' · ') || '—';
+      var metaParts = [];
+      if (d.name) metaParts.push(d.name);
+      if (cur && cur.category) metaParts.push(cur.category);
+      document.getElementById('liveMeta').textContent = metaParts.length ? metaParts.join(' · ') : '—';
 
       nameEl.textContent = cur
         ? cur.full_name
@@ -175,7 +262,6 @@
       var weightLabel = document.getElementById('liveWeightLabel');
       if (weightEl) {
         if (isReps) {
-          // Для народного / reps крупно — сколько раз, вес штанги рядом мельче
           weightEl.innerHTML = cur
             ? (esc(fmtWeight(cur.declared_weight, 'weight', true)) + ' <span>кг</span>')
             : (last && last.bar_weight != null
@@ -202,7 +288,9 @@
     if (!upcoming.length) {
       q.innerHTML = '<li class="live-empty">' + (isArm ? 'Нет следующих боёв' : 'Очередь пуста') + '</li>';
     } else {
-      q.innerHTML = upcoming.map(function (item, i) {
+      var qHtml = '';
+      for (var ui = 0; ui < upcoming.length; ui++) {
+        var item = upcoming[ui];
         var meta = item.is_arm
           ? ('Раунд ' + (item.round_no || item.attempt_no)
             + (item.category ? ' · ' + item.category : ''))
@@ -215,20 +303,24 @@
             + esc(fmtWeight(item.declared_weight, isFolk ? 'weight' : scoring, isFolk))
             + ' ' + esc(isFolk ? 'кг' : barUnit)
             + '</span>');
-        return '<li class="live-queue-item' + (i === 0 ? ' is-next' : '') + (item.deferred ? ' is-deferred' : '') + '">'
+        qHtml += '<li class="live-queue-item' + (ui === 0 ? ' is-next' : '') + (item.deferred ? ' is-deferred' : '') + '">'
           + '<div>'
           + '<div class="live-queue-name">'
-          + (i === 0 ? '<span class="platform-pill platform-pill--next">далее</span> ' : '')
+          + (ui === 0 ? '<span class="platform-pill platform-pill--next">далее</span> ' : '')
           + esc(item.full_name)
           + '</div>'
           + '<div class="live-queue-meta">' + esc(meta) + '</div></div>'
           + right
           + '</li>';
-      }).join('');
+      }
+      q.innerHTML = qHtml;
     }
 
-    var rankHead = document.getElementById('liveRankUnit')
-      || document.querySelector('#liveRank thead th:last-child');
+    var rankHead = document.getElementById('liveRankUnit');
+    if (!rankHead) {
+      var ths = document.querySelectorAll('#liveRank thead th');
+      if (ths && ths.length) rankHead = ths[ths.length - 1];
+    }
     if (rankHead) {
       rankHead.textContent = isArm ? 'Побед' : (isReps ? 'Раз' : 'Рез.');
     }
@@ -238,7 +330,9 @@
     if (!ranking.length) {
       tbody.innerHTML = '<tr><td colspan="3" class="live-empty">Пока нет результатов</td></tr>';
     } else {
-      tbody.innerHTML = ranking.map(function (row) {
+      var rHtml = '';
+      for (var ri = 0; ri < ranking.length; ri++) {
+        var row = ranking[ri];
         var pc = row.place <= 3 ? (' place-' + row.place) : '';
         var res = fmtWeight(row.best_result, isReps ? 'reps' : scoring);
         if (isReps) {
@@ -246,62 +340,71 @@
         } else if (unit) {
           res = res + ' ' + unit;
         }
-        return '<tr>'
-          + '<td class="' + pc.trim() + '">' + row.place + '</td>'
+        rHtml += '<tr>'
+          + '<td class="' + pc.replace(/^\s+/, '') + '">' + row.place + '</td>'
           + '<td>' + esc(row.full_name) + '</td>'
           + '<td>' + esc(res) + '</td>'
           + '</tr>';
-      }).join('');
+      }
+      tbody.innerHTML = rHtml;
     }
   }
 
   function tickPulse(ok) {
     if (!pulse) return;
-    pulse.classList.toggle('is-ok', !!ok);
-    pulse.classList.toggle('is-err', !ok);
+    var cls = pulse.className || '';
+    cls = cls.replace(/\bis-ok\b/g, '').replace(/\bis-err\b/g, '').replace(/\s+/g, ' ').replace(/^\s|\s$/g, '');
+    pulse.className = cls + (ok ? ' is-ok' : ' is-err');
+  }
+
+  function applyData(data) {
+    if (!data || !data.ok) {
+      tickPulse(false);
+      return;
+    }
+    var raw = JSON.stringify(data);
+    if (raw !== lastPayload) {
+      lastPayload = raw;
+      render(data);
+    }
+    tickPulse(true);
   }
 
   function fetchData() {
-    var url = base + '/live/data?discipline=' + encodeURIComponent(disciplineId);
-    fetch(url, { cache: 'no-store' })
-      .then(function (r) { return r.json(); })
-      .then(function (data) {
-        if (!data || !data.ok) {
-          tickPulse(false);
-          return;
-        }
-        var raw = JSON.stringify(data);
-        if (raw !== lastPayload) {
-          lastPayload = raw;
-          render(data);
-        }
-        tickPulse(true);
-      })
-      .catch(function () {
-        tickPulse(false);
-      });
+    var url = base + '/live/data?discipline=' + encodeURIComponent(disciplineId)
+      + '&_=' + (new Date().getTime());
+    getJson(url, applyData, function () { tickPulse(false); });
   }
 
   if (discPick) {
-    discPick.addEventListener('click', function (e) {
-      var btn = e.target.closest('.live-disc-chip');
-      if (!btn || !discPick.contains(btn)) return;
+    discPick.onclick = function (e) {
+      var btn = findChip(e.target || e.srcElement);
+      if (!btn) return;
       var id = btn.getAttribute('data-id');
       if (!id || id === String(disciplineId)) return;
 
       disciplineId = id;
-      discPick.querySelectorAll('.live-disc-chip').forEach(function (chip) {
-        var on = chip.getAttribute('data-id') === id;
-        chip.classList.toggle('is-active', on);
-        chip.setAttribute('aria-selected', on ? 'true' : 'false');
-      });
+      var chips = discPick.querySelectorAll('.live-disc-chip');
+      for (var i = 0; i < chips.length; i++) {
+        var on = chips[i].getAttribute('data-id') === id;
+        var c = chips[i].className || '';
+        c = c.replace(/\bis-active\b/g, '').replace(/\s+/g, ' ').replace(/^\s|\s$/g, '');
+        chips[i].className = on ? (c + ' is-active') : c;
+        chips[i].setAttribute('aria-selected', on ? 'true' : 'false');
+      }
 
-      var u = new URL(window.location.href);
-      u.searchParams.set('discipline', disciplineId);
-      window.history.replaceState({}, '', u.toString());
+      setDisciplineUrl(disciplineId);
       lastPayload = '';
       fetchData();
-    });
+    };
+  }
+
+  // Initial payload from server (works even if polling fails on TV)
+  var boot = document.getElementById('liveBoot');
+  if (boot && boot.textContent) {
+    try {
+      applyData(JSON.parse(boot.textContent));
+    } catch (e) {}
   }
 
   fetchData();
