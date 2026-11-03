@@ -762,14 +762,48 @@ body:has(.app-modal-backdrop:not(.hidden)) {
 }
 
 .home-hero-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
   min-width: 11rem;
   min-height: 3.1rem;
-  padding-inline: 1.35rem;
+  padding: 0.7rem 1.35rem;
   border-radius: 0.35rem;
   font-size: 0.95rem;
   font-weight: 800;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+  text-decoration: none;
+  box-sizing: border-box;
+}
+
+.home-hero-cta-live {
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  background: rgba(0, 0, 0, 0.35);
+  color: #fff;
+}
+
+.home-hero-cta-live::before {
+  content: "";
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: var(--signal);
+  box-shadow: 0 0 0 0 rgba(225, 6, 0, 0.55);
+  animation: home-live-pulse 1.6s ease-out infinite;
+}
+
+@keyframes home-live-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(225, 6, 0, 0.55); }
+  70% { box-shadow: 0 0 0 0.55rem rgba(225, 6, 0, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(225, 6, 0, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-hero-cta-live::before {
+    animation: none;
+  }
 }
 
 .home-body {

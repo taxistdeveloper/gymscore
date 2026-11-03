@@ -28,6 +28,7 @@ $t = $t ?? static fn(string $key, ?string $fallback = null): string => Lang::t($
 
     <div class="home-hero-actions">
       <a class="btn-primary home-hero-cta" href="<?= htmlspecialchars($base) ?>/register"><?= htmlspecialchars($t('home.register')) ?></a>
+      <a class="home-hero-cta home-hero-cta-live" href="<?= htmlspecialchars($base) ?>/live"><?= htmlspecialchars($t('home.live')) ?></a>
     </div>
   </div>
 </section>
