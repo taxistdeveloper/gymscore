@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "css": "tailwindcss -i ./assets/tailwind.css -o ./public/css/tailwind.css --minify",
+    "css": "tailwindcss -i ./assets/tailwind.css -o ./public/css/tailwind.css --minify && node scripts/unwrap-css-layers.mjs ./public/css/tailwind.css",
     "css:watch": "tailwindcss -i ./assets/tailwind.css -o ./public/css/tailwind.css --watch"
   },
   "devDependencies": {
