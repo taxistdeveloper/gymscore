@@ -267,22 +267,32 @@ class Participant
     }
 
     /**
-     * Новые заявки, сгруппированные по дисциплинам (порядок sort_order).
+     * Заявки, сгруппированные по дисциплинам (порядок sort_order).
      * Участник с несколькими дисциплинами попадает в каждую группу.
      *
-     * @return list<array{id:int,name_ru:string,code:string,participants:list<array>}>
+     * @return list<array{id:int,name_ru:string,code:string,participants:list<array>,by_age:array}>
      */
-    public static function pendingGroupedByDiscipline(?int $disciplineId = null): array
+    public static function groupedByDiscipline(?string $status = null, string $q = '', ?int $disciplineId = null): array
     {
         $sql = 'SELECT d.id AS discipline_id, d.name_ru AS discipline_name, d.code AS discipline_code,
                        p.*,
                        r.weight_category AS reg_weight_category
                 FROM disciplines d
                 INNER JOIN registrations r ON r.discipline_id = d.id
-                INNER JOIN participants p ON p.id = r.participant_id AND p.status = ?
+                INNER JOIN participants p ON p.id = r.participant_id
                 WHERE 1 = 1';
-        $params = [self::STATUS_PENDING];
+        $params = [];
 
+        if ($status !== null && $status !== '' && $status !== 'all') {
+            $sql .= ' AND p.status = ?';
+            $params[] = $status;
+        }
+        if ($q !== '') {
+            $sql .= ' AND (p.full_name LIKE ? OR IFNULL(p.phone, "") LIKE ?)';
+            $like = '%' . $q . '%';
+            $params[] = $like;
+            $params[] = $like;
+        }
         if ($disciplineId !== null && $disciplineId > 0) {
             $sql .= ' AND d.id = ?';
             $params[] = $disciplineId;
@@ -290,6 +300,7 @@ class Participant
 
         $sql .= ' ORDER BY d.sort_order,
                          FIELD(IFNULL(p.age_group, ""), "juniors", "open"),
+                         FIELD(p.status, "pending", "approved", "rejected"),
                          p.created_at DESC,
                          p.full_name';
 
@@ -325,6 +336,12 @@ class Participant
         }
 
         return array_values($groups);
+    }
+
+    /** Новые заявки, сгруппированные по дисциплинам. */
+    public static function pendingGroupedByDiscipline(?int $disciplineId = null): array
+    {
+        return self::groupedByDiscipline(self::STATUS_PENDING, '', $disciplineId);
     }
 
     public static function update(int $id, array $data, array $disciplineIds, array $disciplineCategories = []): void

@@ -63,9 +63,16 @@ class AdminController extends Controller
 
         $q = trim($_GET['q'] ?? '');
         $counts = Participant::countsByStatus();
+        $groups = Participant::groupedByDiscipline($status, $q);
+
+        $listed = 0;
+        foreach ($groups as $g) {
+            $listed += count($g['participants']);
+        }
 
         $this->view('admin/dashboard', [
-            'participants' => Participant::allWithDisciplines($status, $q),
+            'groups'       => $groups,
+            'listedCount'  => $listed,
             'counts'       => $counts,
             'status'       => $status,
             'statuses'     => Participant::statuses(),
