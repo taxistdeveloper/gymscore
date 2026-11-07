@@ -640,7 +640,7 @@ class JudgeController extends Controller
                 : [],
             'disciplines'  => $disciplines,
             'discipline'   => $discipline,
-            'counts'       => Participant::weighInCounts(),
+            'counts'       => Participant::weighInCounts($disciplineId > 0 ? $disciplineId : null),
             'filter'       => $filter,
             'q'            => $q,
             'flash'        => $this->takeFlash(),

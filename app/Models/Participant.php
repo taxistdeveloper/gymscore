@@ -575,17 +575,35 @@ class Participant
         return $st->fetchAll();
     }
 
-    public static function weighInCounts(): array
+    /**
+     * Счётчики взвешивания. Если передан disciplineId — только участники этой дисциплины.
+     *
+     * @return array{all: int, done: int, pending: int}
+     */
+    public static function weighInCounts(?int $disciplineId = null): array
     {
-        $st = Database::pdo()->prepare(
-            'SELECT
-               COUNT(*) AS total,
-               SUM(weighed_at IS NOT NULL) AS done,
-               SUM(weighed_at IS NULL) AS pending
-             FROM participants
-             WHERE status = ?'
-        );
-        $st->execute([self::STATUS_APPROVED]);
+        if ($disciplineId !== null && $disciplineId > 0) {
+            $st = Database::pdo()->prepare(
+                'SELECT
+                   COUNT(DISTINCT p.id) AS total,
+                   COUNT(DISTINCT CASE WHEN p.weighed_at IS NOT NULL THEN p.id END) AS done,
+                   COUNT(DISTINCT CASE WHEN p.weighed_at IS NULL THEN p.id END) AS pending
+                 FROM participants p
+                 INNER JOIN registrations r ON r.participant_id = p.id AND r.discipline_id = ?
+                 WHERE p.status = ?'
+            );
+            $st->execute([$disciplineId, self::STATUS_APPROVED]);
+        } else {
+            $st = Database::pdo()->prepare(
+                'SELECT
+                   COUNT(*) AS total,
+                   SUM(weighed_at IS NOT NULL) AS done,
+                   SUM(weighed_at IS NULL) AS pending
+                 FROM participants
+                 WHERE status = ?'
+            );
+            $st->execute([self::STATUS_APPROVED]);
+        }
         $row = $st->fetch() ?: [];
         return [
             'all'     => (int) ($row['total'] ?? 0),

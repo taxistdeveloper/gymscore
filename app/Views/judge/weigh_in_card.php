@@ -9,10 +9,13 @@ $filter = $filter ?? 'pending';
 $q = $q ?? '';
 $disciplineId = (int) ($disciplineId ?? 0);
 $genderLabel = ($p['gender'] ?? '') === 'F' ? 'Женщина' : 'Мужчина';
+$ageCode = (string) ($p['age_group'] ?? '');
+$isJunior = $ageCode === 'juniors';
+$ageLabel = $isJunior ? 'Юниор' : ($ageCode === 'open' ? 'Открытая' : '');
 $done = !empty($p['weighed_at']);
-$bw = $done || ((float) ($p['body_weight'] ?? 0) > 0)
-    ? number_format((float) $p['body_weight'], 2, '.', '')
-    : '';
+$bwNum = (float) ($p['body_weight'] ?? 0);
+$bwKnown = $bwNum > 0;
+$bw = $bwKnown ? number_format($bwNum, 2, '.', '') : '';
 $registeredCategory = Participant::weighCategoryLabel($p);
 $listHref = $base . '/judge/weigh-in?filter=' . urlencode($filter)
     . ($disciplineId > 0 ? '&discipline=' . $disciplineId : '')
@@ -34,6 +37,11 @@ $allDisciplines = $disciplines ?? [];
         <h1 class="weigh-modal-title" id="weighModalTitle">
           <?= htmlspecialchars($p['full_name']) ?>
           <span class="weigh-modal-gender"><?= $genderLabel ?></span>
+          <?php if ($ageLabel !== ''): ?>
+            <span class="weigh-age<?= $isJunior ? ' weigh-age--jr' : ' weigh-age--open' ?>">
+              <?= htmlspecialchars($ageLabel) ?>
+            </span>
+          <?php endif; ?>
         </h1>
       </div>
       <a class="weigh-modal-close" href="<?= htmlspecialchars($listHref) ?>"
@@ -61,10 +69,18 @@ $allDisciplines = $disciplines ?? [];
                  type="number" step="0.01" min="20" max="300" required
                  inputmode="decimal" autocomplete="off"
                  value="<?= htmlspecialchars($bw) ?>"
-                 placeholder="00.00">
+                 placeholder="00.00"
+                 data-bw-known="<?= $bwKnown ? '1' : '0' ?>">
           <span class="weigh-bw-unit">кг</span>
         </div>
-        <p class="weigh-hint">Фиксируется для протокола и народного жима (½ с/в). Категорию не пересчитывает.</p>
+        <?php if ($bwKnown): ?>
+          <p class="weigh-hint weigh-hint--ok">
+            Уже записан<?= $done ? ' на взвешивании' : '' ?>: <strong><?= htmlspecialchars($bw) ?> кг</strong>
+            — подставлен автоматически для всех дисциплин.
+          </p>
+        <?php else: ?>
+          <p class="weigh-hint">Фиксируется один раз для всех дисциплин и народного жима (½ с/в). Категорию не пересчитывает.</p>
+        <?php endif; ?>
       </div>
 
       <?php if (!empty($allDisciplines)): ?>
@@ -93,17 +109,20 @@ $allDisciplines = $disciplines ?? [];
                     : $registeredCategory;
                 $catMax = WeightCategory::maxFromLabel($catLive);
                 $opening = $reg['opening_weight'] ?? null;
+                $openingNum = ($opening !== null && $opening !== '') ? (float) $opening : null;
+                // 0 считаем «не задан» — подставим из с/в или категории
+                $hasOpening = $openingNum !== null && $openingNum > 0;
 
-                if ($opening !== null && $opening !== '') {
+                if ($hasOpening) {
                     $openingVal = number_format(
-                        (float) $opening,
+                        $openingNum,
                         $scoring === 'weight' || $isFolk ? 1 : 0,
                         '.',
                         ''
                     );
-                } elseif ($isFolk && $bw !== '') {
+                } elseif ($isFolk && $bwKnown) {
                     $openingVal = number_format(
-                        \App\Models\FolkBench::barWeight((float) $bw),
+                        \App\Models\FolkBench::barWeight($bwNum),
                         1,
                         '.',
                         ''
@@ -251,7 +270,12 @@ $allDisciplines = $disciplines ?? [];
     input.addEventListener('input', function () {
       updateFolk(false);
     });
-    input.focus();
+    // Если вес уже записан (др. дисциплина) — сразу пересчитать народный ½ с/в
+    if (input.value) {
+      updateFolk(false);
+    } else {
+      input.focus();
+    }
   }
 
   if (form) {

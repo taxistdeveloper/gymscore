@@ -147,6 +147,9 @@ require __DIR__ . '/nav.php';
             $cardHref = $base . '/judge/weigh-in/' . $pid . $weighQuery();
             $genderLabel = ($p['gender'] ?? '') === 'F' ? 'Ж' : 'М';
             $weightCat = \App\Models\Participant::weighCategoryLabel($p);
+            $ageCode = (string) ($p['age_group'] ?? '');
+            $isJunior = $ageCode === 'juniors';
+            $ageLabel = $isJunior ? 'Юниор' : ($ageCode === 'open' ? 'Открытая' : '');
           ?>
           <a class="weigh-card<?= $done ? ' is-done' : '' ?>" href="<?= htmlspecialchars($cardHref) ?>">
             <div class="weigh-card-main">
@@ -154,6 +157,11 @@ require __DIR__ . '/nav.php';
                 <h3 class="weigh-name">
                   <?= htmlspecialchars($p['full_name']) ?>
                   <span class="weigh-card-gender"><?= $genderLabel ?></span>
+                  <?php if ($ageLabel !== ''): ?>
+                    <span class="weigh-age<?= $isJunior ? ' weigh-age--jr' : ' weigh-age--open' ?>">
+                      <?= htmlspecialchars($ageLabel) ?>
+                    </span>
+                  <?php endif; ?>
                 </h3>
                 <p class="weigh-meta">
                   <?= htmlspecialchars($weightCat) ?>
