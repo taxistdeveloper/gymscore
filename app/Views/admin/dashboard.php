@@ -6,7 +6,6 @@ $counts = $counts ?? ['all' => 0, 'pending' => 0, 'approved' => 0, 'rejected' =>
 $statuses = $statuses ?? [];
 $groups = $groups ?? [];
 $listedCount = (int) ($listedCount ?? 0);
-$pendingCount = (int) ($counts['pending'] ?? 0);
 
 $tabs = [
     'pending'  => 'Новые',
@@ -151,9 +150,7 @@ $renderPeople = static function (array $people) use ($base, $statuses): void {
       <div>
         <h2 class="apps-list-title">
           Заявки
-          <?php if ($status === 'pending' && $pendingCount > 0): ?>
-            <span class="apps-list-count"><?= str_pad((string) $pendingCount, 2, '0', STR_PAD_LEFT) ?></span>
-          <?php elseif ($listedCount > 0): ?>
+          <?php if ($listedCount > 0): ?>
             <span class="apps-list-count"><?= str_pad((string) $listedCount, 2, '0', STR_PAD_LEFT) ?></span>
           <?php endif; ?>
         </h2>
@@ -175,6 +172,7 @@ $renderPeople = static function (array $people) use ($base, $statuses): void {
           <?php endif; ?>
         </form>
         <nav class="admin-apps-nav" aria-label="Действия">
+          <a class="btn-secondary-sm" href="<?= htmlspecialchars($base) ?>/admin/qr">QR</a>
           <a class="btn-secondary-sm" href="<?= htmlspecialchars($base) ?>/admin/users">Юзеры</a>
           <a class="btn-secondary-sm" href="<?= htmlspecialchars($base) ?>/register">+</a>
           <a class="btn-secondary-sm" href="<?= htmlspecialchars($base) ?>/admin/logout">Выйти</a>

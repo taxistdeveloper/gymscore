@@ -5,9 +5,10 @@ return [
     'nav.register' => 'Регистрация',
     'nav.applications' => 'Заявки',
     'nav.live' => 'Live',
+    'nav.protocol' => 'Протокол',
     'nav.judge' => 'Судья',
     'nav.admin' => 'Админ',
-    'nav.results' => 'Протокол',
+    'nav.results' => 'Места',
 
     'apps.title' => 'Новые заявки',
     'apps.sub' => 'Только просмотр · ждут проверки',

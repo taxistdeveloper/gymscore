@@ -7,6 +7,7 @@ use App\Controllers\JudgeController;
 use App\Controllers\AdminController;
 use App\Controllers\BoardController;
 use App\Controllers\ResultsController;
+use App\Controllers\ProtocolController;
 use App\Core\Router;
 
 /** @var Router $router */
@@ -38,6 +39,7 @@ $router->get('/admin/login', [AdminController::class, 'loginForm']);
 $router->post('/admin/login', [AdminController::class, 'login']);
 $router->get('/admin/logout', [AdminController::class, 'logout']);
 $router->get('/admin', [AdminController::class, 'dashboard']);
+$router->get('/admin/qr', [AdminController::class, 'qr']);
 $router->get('/admin/participants/{id}', [AdminController::class, 'editForm']);
 $router->post('/admin/participants/{id}', [AdminController::class, 'update']);
 $router->post('/admin/participants/{id}/status', [AdminController::class, 'setStatus']);
@@ -52,6 +54,8 @@ $router->post('/admin/users/{role}/{id}/delete', [AdminController::class, 'userD
 
 $router->get('/results', [ResultsController::class, 'index']);
 $router->get('/results/pdf', [ResultsController::class, 'pdf']);
+
+$router->get('/protocol', [ProtocolController::class, 'index']);
 
 $router->get('/live', [BoardController::class, 'index']);
 $router->get('/live/data', [BoardController::class, 'data']);

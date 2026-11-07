@@ -14,6 +14,7 @@ $adminId = (int) ($adminId ?? 0);
   </div>
   <div class="flex flex-wrap gap-2">
     <a class="btn-secondary-sm" href="<?= htmlspecialchars($base) ?>/admin">Заявки</a>
+    <a class="btn-secondary-sm" href="<?= htmlspecialchars($base) ?>/admin/qr">QR</a>
     <a class="btn-primary-sm"
        href="<?= htmlspecialchars($base) ?>/admin/users/new?role=<?= urlencode($role) ?>">+ Добавить</a>
   </div>

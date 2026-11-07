@@ -25,6 +25,7 @@ $nav = [
     '/register' => [$t('nav.register'), $base . '/register'],
     '/applications' => [$t('nav.applications'), $base . '/applications'],
     '/live' => [$t('nav.live'), $base . '/live'],
+    '/protocol' => [$t('nav.protocol'), $base . '/protocol'],
     '/judge' => [$t('nav.judge'), $base . '/judge'],
     '/admin' => [$t('nav.admin'), $base . '/admin'],
     '/results' => [$t('nav.results'), $base . '/results'],
@@ -38,11 +39,14 @@ $flashTone = [
 $isHome = ($path === '/');
 $isRegister = str_starts_with($path, '/register');
 $isApplications = str_starts_with($path, '/applications');
+$isProtocol = str_starts_with($path, '/protocol');
+$isLoggedIn = !empty($_SESSION['judge_id']) || !empty($_SESSION['admin_id']);
+$isProtocolGuest = $isProtocol && !$isLoggedIn;
 $isAdminLogin = ($path === '/admin/login');
 $isJudgeLogin = ($path === '/judge/login');
 $isAuthLogin = $isAdminLogin || $isJudgeLogin;
-$hideChromeHeader = $isHome || $isRegister || $isApplications || $isAuthLogin;
-$hideFooter = $isAuthLogin;
+$hideChromeHeader = $isHome || $isRegister || $isApplications || $isAuthLogin || $isProtocolGuest;
+$hideFooter = $isAuthLogin || $isProtocolGuest;
 $themeToggle = static function () use ($t): void { ?>
   <button type="button" class="theme-toggle" data-theme-toggle aria-pressed="false" aria-label="<?= htmlspecialchars($t('theme.toggle')) ?>">
     <span class="theme-toggle-track" aria-hidden="true"><span class="theme-toggle-knob"></span></span>
@@ -86,8 +90,7 @@ $langSwitch = static function () use ($lang): void { ?>
     .live-disc-chip,.live-exit{display:inline-block;border:2px solid #999;background:#fff;color:#111;border-radius:6px;padding:10px 14px;font-weight:700;text-decoration:none;margin:0 6px 6px 0}
     .live-disc-chip.is-active{background:#e10600!important;border-color:#e10600!important;color:#fff!important}
     .live-now-badge{display:inline-block;background:#e10600;color:#fff;border-radius:4px;padding:6px 12px;font-weight:700}
-    .live-brand-name{font-size:28px;font-weight:700}
-    .live-brand-name em{font-style:normal;color:#e10600}
+    .live-brand-logo{display:block;height:64px;width:auto;max-width:340px}
   </style>
   <?php else: ?>
   <?php if ($isHome): ?>
@@ -99,13 +102,16 @@ $langSwitch = static function () use ($lang): void { ?>
   <link href="<?= htmlspecialchars($base) ?>/css/app.css?v=<?= (int) $appV ?>" rel="stylesheet">
   <?php endif; ?>
 </head>
-<body class="<?= $isLivePage ? 'live-body' : 'min-h-screen bg-canvas font-sans text-ink antialiased' ?><?= $hideChromeHeader && !$isLivePage ? ' home-page' : '' ?>">
+<body class="<?= $isLivePage ? 'live-body' : 'min-h-screen bg-canvas font-sans text-ink antialiased' ?><?= $hideChromeHeader && !$isLivePage && !$isProtocolGuest ? ' home-page' : '' ?>">
 <?php if (!$isLivePage && !$hideChromeHeader): ?>
 <header class="sticky top-0 z-40 border-b-[3px] border-signal bg-chrome text-on-chrome">
   <div class="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-x-4 gap-y-2 px-4 py-3">
-    <a class="order-1 flex items-center gap-2.5 text-lg font-semibold tracking-tight text-on-chrome no-underline" href="<?= htmlspecialchars($base) ?>/">
-      <span class="inline-block size-2.5 shrink-0 bg-signal" aria-hidden="true"></span>
-      Alash Gym
+    <a class="site-brand order-1" href="<?= htmlspecialchars($base) ?>/">
+      <img class="site-brand-logo"
+           src="<?= htmlspecialchars($base) ?>/img/alash-gym-logo.png"
+           width="505"
+           height="116"
+           alt="Alash Gym">
     </a>
     <nav id="navMenu" class="order-3 flex w-full flex-col max-lg:hidden lg:order-2 lg:w-auto lg:flex-1 lg:flex-row lg:justify-end">
       <ul class="flex flex-col gap-1 lg:flex-row lg:items-center">
@@ -140,8 +146,8 @@ $live = !empty($live);
 <?php if ($live): ?>
 <?= $content ?>
 <?php else: ?>
-<main class="<?= $hideChromeHeader ? 'home-main' : ($wide ? 'w-full px-3 py-3 lg:px-4' : 'mx-auto w-full max-w-6xl px-4 py-8') ?>">
-  <?php if ($hideChromeHeader): ?>
+<main class="<?= ($hideChromeHeader && !$isProtocolGuest) ? 'home-main' : ($wide || $isProtocol ? 'w-full px-3 py-3 lg:px-4' : 'mx-auto w-full max-w-6xl px-4 py-8') ?>">
+  <?php if ($hideChromeHeader && !$isProtocolGuest): ?>
     <div class="home-toolbar">
       <?php $langSwitch(); ?>
       <?php $themeToggle(); ?>

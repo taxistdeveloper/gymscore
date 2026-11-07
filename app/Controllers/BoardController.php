@@ -173,19 +173,24 @@ class BoardController extends Controller
         }
 
         $upcoming = [];
-        foreach ($queue as $item) {
-            if ($current && ($item['queue_key'] ?? '') === ($current['queue_key'] ?? '')) {
-                continue;
-            }
-            $upcoming[] = [
+        $queueBoard = [];
+        foreach ($queue as $qi => $item) {
+            $entry = [
+                'participant_id'  => (int) $item['participant_id'],
                 'full_name'       => $item['full_name'],
                 'attempt_no'      => (int) $item['attempt_no'],
                 'lot_number'      => $item['lot_number'],
                 'declared_weight' => (float) $item['declared_weight'],
                 'deferred'        => !empty($item['deferred']),
+                'queue_key'       => (string) ($item['queue_key'] ?? ((int) $item['participant_id'] . '-' . (int) $item['attempt_no'])),
+                'pos'             => $qi + 1,
             ];
-            if (count($upcoming) >= 12) {
-                break;
+            $queueBoard[] = $entry;
+            if ($current && ($item['queue_key'] ?? '') === ($current['queue_key'] ?? '')) {
+                continue;
+            }
+            if (count($upcoming) < 12) {
+                $upcoming[] = $entry;
             }
         }
 
@@ -217,6 +222,7 @@ class BoardController extends Controller
                 'attempts_allowed' => $attemptsAllowed,
             ],
             'current' => $current ? [
+                'participant_id'  => (int) $current['participant_id'],
                 'full_name'       => $current['full_name'],
                 'attempt_no'      => (int) $current['attempt_no'],
                 'declared_weight' => (float) $current['declared_weight'],
@@ -225,11 +231,13 @@ class BoardController extends Controller
                 'category'        => $category,
                 'gender'          => $current['gender'],
                 'deferred'        => !empty($current['deferred']),
+                'queue_key'       => (string) ($current['queue_key'] ?? ((int) $current['participant_id'] . '-' . (int) $current['attempt_no'])),
             ] : null,
             'last_result' => $lastResult,
             'match'       => null,
             'bar'         => $bar,
             'upcoming'    => $upcoming,
+            'queue'       => $queueBoard,
             'ranking'     => $board,
         ];
     }

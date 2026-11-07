@@ -4,8 +4,11 @@
   <div class="auth-login-veil" aria-hidden="true"></div>
   <div class="auth-login-panel">
     <a class="auth-login-brand" href="<?= htmlspecialchars($base) ?>/">
-      <span class="auth-login-brand-mark" aria-hidden="true"></span>
-      Alash Gym
+      <img class="auth-login-logo"
+           src="<?= htmlspecialchars($base) ?>/img/alash-gym-logo.png"
+           width="505"
+           height="116"
+           alt="Alash Gym">
     </a>
     <p class="kicker mb-3">Админка</p>
     <div class="card card-accent">

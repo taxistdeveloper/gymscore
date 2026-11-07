@@ -183,4 +183,12 @@ class Attempt
         $st->execute([$disciplineId]);
         return $st->fetchAll();
     }
+
+    public static function delete(int $participantId, int $disciplineId, int $attemptNo): void
+    {
+        $st = Database::pdo()->prepare(
+            'DELETE FROM attempts WHERE participant_id = ? AND discipline_id = ? AND attempt_no = ?'
+        );
+        $st->execute([$participantId, $disciplineId, $attemptNo]);
+    }
 }

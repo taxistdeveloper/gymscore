@@ -14,7 +14,11 @@ if ($bootJson === false) {
      data-discipline="<?= $disciplineId ?>">
   <header class="live-top">
     <div class="live-brand">
-      <span class="live-brand-name">ALASH <em>GYM</em></span>
+      <img class="live-brand-logo"
+           src="<?= htmlspecialchars($base) ?>/img/alash-gym-logo.png"
+           width="505"
+           height="116"
+           alt="Alash Gym">
       <span class="live-brand-live">
         <span class="live-brand-live-dot" aria-hidden="true"></span>
         LIVE

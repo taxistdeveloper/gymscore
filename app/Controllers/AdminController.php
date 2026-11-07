@@ -65,10 +65,14 @@ class AdminController extends Controller
         $counts = Participant::countsByStatus();
         $groups = Participant::groupedByDiscipline($status, $q);
 
-        $listed = 0;
+        // Уникальные участники (не «слоты» по дисциплинам) — совпадает с вкладками.
+        $seen = [];
         foreach ($groups as $g) {
-            $listed += count($g['participants']);
+            foreach ($g['participants'] as $p) {
+                $seen[(int) $p['id']] = true;
+            }
         }
+        $listed = count($seen);
 
         $this->view('admin/dashboard', [
             'groups'       => $groups,
@@ -209,6 +213,31 @@ class AdminController extends Controller
         Participant::delete($pid);
         $this->flash('success', "Заявка #{$pid} удалена");
         $this->redirect('/admin');
+    }
+
+    public function qr(): void
+    {
+        $this->requireAdmin();
+
+        $base = $this->config['base_url'] ?? '';
+        $https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+            || ((int) ($_SERVER['SERVER_PORT'] ?? 0) === 443);
+        $scheme = $https ? 'https' : 'http';
+        $host = $_SERVER['HTTP_HOST'] ?? 'localhost';
+        $origin = $scheme . '://' . $host . $base;
+
+        $this->view('admin/qr', [
+            'defaultUrl' => $origin . '/register',
+            'presets'    => [
+                ['label' => 'Регистрация', 'url' => $origin . '/register'],
+                ['label' => 'Заявки', 'url' => $origin . '/applications'],
+                ['label' => 'Табло', 'url' => $origin . '/live'],
+                ['label' => 'Протокол', 'url' => $origin . '/protocol'],
+                ['label' => 'Главная', 'url' => $origin . '/'],
+            ],
+            'flash'      => $this->takeFlash(),
+            'adminName'  => $_SESSION['admin_name'] ?? 'Админ',
+        ]);
     }
 
     public function users(): void

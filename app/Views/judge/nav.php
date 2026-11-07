@@ -10,6 +10,7 @@ $modes = [
     'platform' => ['Помост', $base . '/judge' . $discQs],
     'weigh'    => ['Взвешивание', $base . '/judge/weigh-in'],
     'protocol' => ['Протокол', $base . '/judge/protocol' . $discQs],
+    // /judge/arm → протокол армрестлинга с открытой модалкой судейства
     'arm'      => ['Арм', $base . '/judge/arm'],
 ];
 ?>

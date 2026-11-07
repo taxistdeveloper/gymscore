@@ -21,7 +21,7 @@ class ArmMatch
     public static function eligibleByCategory(int $disciplineId): array
     {
         $st = Database::pdo()->prepare(
-            'SELECT p.id, p.full_name, p.body_weight, p.gender, p.lot_number, p.age_group,
+            'SELECT p.id, p.full_name, p.body_weight, p.gender, p.lot_number, p.age_group, p.birth_year,
                     COALESCE(r.weight_category, p.weight_category) AS weight_category, p.weighed_at
              FROM participants p
              JOIN registrations r ON r.participant_id = p.id AND r.discipline_id = ?
@@ -139,6 +139,43 @@ class ArmMatch
         return $st->fetchAll();
     }
 
+    /**
+     * Доска судейства: участники и раунды по категориям + счёт побед.
+     *
+     * @return array{byCategory: array<string, array>, wins: array<int, int>}
+     */
+    public static function boardData(int $disciplineId): array
+    {
+        $eligible = self::eligibleByCategory($disciplineId);
+        $matches = self::allForDiscipline($disciplineId);
+        $wins = self::winCounts($disciplineId);
+
+        $byCategory = [];
+        foreach ($matches as $m) {
+            $cat = $m['weight_category'];
+            $round = (int) $m['round_no'];
+            $byCategory[$cat]['rounds'][$round][] = $m;
+            $byCategory[$cat]['max_round'] = max(
+                (int) ($byCategory[$cat]['max_round'] ?? 0),
+                $round
+            );
+        }
+
+        foreach ($eligible as $cat => $people) {
+            if (!isset($byCategory[$cat])) {
+                $byCategory[$cat] = ['rounds' => [], 'max_round' => 0];
+            }
+            $byCategory[$cat]['people'] = $people;
+        }
+
+        ksort($byCategory);
+
+        return [
+            'byCategory' => $byCategory,
+            'wins'       => $wins,
+        ];
+    }
+
     /** Число побед по дисциплине (из завершённых матчей). */
     public static function winCounts(int $disciplineId): array
     {
@@ -154,6 +191,142 @@ class ArmMatch
             $out[(int) $row['winner_id']] = (int) $row['wins'];
         }
         return $out;
+    }
+
+    /**
+     * Протокол армрестлинга: таблица мест по ВК + список боёв.
+     *
+     * @return array{
+     *   categories: list<array{category:string,category_short:string,sort_key:float,athletes:list<array>}>,
+     *   matches: list<array>,
+     *   total_athletes: int,
+     *   total_matches: int,
+     *   done_matches: int
+     * }
+     */
+    public static function buildProtocol(int $disciplineId): array
+    {
+        $eligible = self::eligibleByCategory($disciplineId);
+        $matches = self::allForDiscipline($disciplineId);
+        $wins = self::winCounts($disciplineId);
+
+        $losses = [];
+        $played = [];
+        foreach ($matches as $m) {
+            if (($m['status'] ?? '') !== 'done') {
+                continue;
+            }
+            $p1 = (int) $m['participant1_id'];
+            $p2 = $m['participant2_id'] !== null ? (int) $m['participant2_id'] : null;
+            $winner = $m['winner_id'] !== null ? (int) $m['winner_id'] : null;
+            if ($p2 === null) {
+                // bye — не считаем поражением
+                $played[$p1] = ($played[$p1] ?? 0) + 1;
+                continue;
+            }
+            $played[$p1] = ($played[$p1] ?? 0) + 1;
+            $played[$p2] = ($played[$p2] ?? 0) + 1;
+            if ($winner === $p1) {
+                $losses[$p2] = ($losses[$p2] ?? 0) + 1;
+            } elseif ($winner === $p2) {
+                $losses[$p1] = ($losses[$p1] ?? 0) + 1;
+            }
+        }
+
+        $grouped = [];
+        foreach ($eligible as $cat => $people) {
+            $catShort = PowerProtocol::formatCategoryShort($cat);
+            $athletes = [];
+            foreach ($people as $p) {
+                $pid = (int) $p['id'];
+                $bw = isset($p['body_weight']) ? (float) $p['body_weight'] : null;
+                $w = (int) ($wins[$pid] ?? 0);
+                $l = (int) ($losses[$pid] ?? 0);
+                $athletes[] = [
+                    'id'              => $pid,
+                    'lot_number'      => !empty($p['lot_number']) ? (int) $p['lot_number'] : $pid,
+                    'full_name'       => (string) ($p['full_name'] ?? '—'),
+                    'team'            => !empty($p['team']) ? (string) $p['team'] : (!empty($p['club']) ? (string) $p['club'] : '—'),
+                    'birth_year'      => !empty($p['birth_year']) ? (int) $p['birth_year'] : '—',
+                    'body_weight'     => $bw,
+                    'body_weight_fmt' => $bw !== null ? number_format($bw, 2, ',', '') : '—',
+                    'category_short'  => $catShort,
+                    'category_full'   => $cat,
+                    'wins'            => $w,
+                    'losses'          => $l,
+                    'played'          => (int) ($played[$pid] ?? 0),
+                    'has_result'      => $w > 0 || $l > 0 || (($played[$pid] ?? 0) > 0),
+                    'place'           => null,
+                ];
+            }
+
+            usort($athletes, static function (array $a, array $b): int {
+                if ($a['has_result'] !== $b['has_result']) {
+                    return $a['has_result'] ? -1 : 1;
+                }
+                if ($a['wins'] !== $b['wins']) {
+                    return $b['wins'] <=> $a['wins'];
+                }
+                if ($a['losses'] !== $b['losses']) {
+                    return $a['losses'] <=> $b['losses'];
+                }
+                $bwa = $a['body_weight'] !== null ? (float) $a['body_weight'] : 9999.0;
+                $bwb = $b['body_weight'] !== null ? (float) $b['body_weight'] : 9999.0;
+                if ($bwa !== $bwb) {
+                    return $bwa <=> $bwb;
+                }
+                return strcmp($a['full_name'], $b['full_name']);
+            });
+
+            $currentPlace = 0;
+            $currentRank = 0;
+            $prevW = null;
+            $prevL = null;
+            $prevBw = null;
+            foreach ($athletes as &$ath) {
+                if (!$ath['has_result']) {
+                    $ath['place'] = '—';
+                    continue;
+                }
+                $currentRank++;
+                $same = ($prevW !== null)
+                    && (int) $ath['wins'] === (int) $prevW
+                    && (int) $ath['losses'] === (int) $prevL
+                    && (float) $ath['body_weight'] === (float) $prevBw;
+                if (!$same) {
+                    $currentPlace = $currentRank;
+                }
+                $ath['place'] = $currentPlace;
+                $prevW = $ath['wins'];
+                $prevL = $ath['losses'];
+                $prevBw = $ath['body_weight'];
+            }
+            unset($ath);
+
+            $grouped[] = [
+                'category'       => $cat,
+                'category_short' => $catShort,
+                'sort_key'       => PowerProtocol::categorySortKey($cat),
+                'athletes'       => $athletes,
+            ];
+        }
+
+        usort($grouped, static fn(array $a, array $b): int => $a['sort_key'] <=> $b['sort_key']);
+
+        $done = 0;
+        foreach ($matches as $m) {
+            if (($m['status'] ?? '') === 'done') {
+                $done++;
+            }
+        }
+
+        return [
+            'categories'      => $grouped,
+            'matches'         => $matches,
+            'total_athletes'  => array_sum(array_map(static fn(array $g): int => count($g['athletes']), $grouped)),
+            'total_matches'   => count($matches),
+            'done_matches'    => $done,
+        ];
     }
 
     public static function syncWins(int $disciplineId): void

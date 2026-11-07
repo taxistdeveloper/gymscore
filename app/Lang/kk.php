@@ -5,9 +5,10 @@ return [
     'nav.register' => 'Тіркелу',
     'nav.applications' => 'Өтінімдер',
     'nav.live' => 'Live',
+    'nav.protocol' => 'Хаттама',
     'nav.judge' => 'Төреші',
     'nav.admin' => 'Админ',
-    'nav.results' => 'Хаттама',
+    'nav.results' => 'Орындар',
 
     'apps.title' => 'Жаңа өтінімдер',
     'apps.sub' => 'Тек қарау · тексеруді күтуде',

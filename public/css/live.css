@@ -87,6 +87,12 @@ button {
 }
 
 .live-brand { margin-right: 12px; }
+.live-brand-logo {
+  display: block;
+  height: 64px;
+  width: auto;
+  max-width: 340px;
+}
 .live-brand-live { margin-left: 10px; }
 .live-top-right {
   -webkit-box-flex: 1;
@@ -101,18 +107,6 @@ button {
 }
 .live-top-tools { margin-left: 8px; }
 .live-top-tools > * { margin-left: 6px; }
-
-.live-brand-name {
-  font-weight: 700;
-  font-size: 28px;
-  letter-spacing: -0.02em;
-  white-space: nowrap;
-}
-.live-brand-name em {
-  font-style: normal;
-  color: #e10600;
-  color: var(--signal);
-}
 
 .live-brand-live {
   font-size: 14px;
@@ -628,7 +622,7 @@ html[data-theme="dark"] .theme-label-dark { display: inline; }
 }
 
 @media (min-width: 1400px) {
-  .live-brand-name { font-size: 32px; }
+  .live-brand-logo { height: 76px; max-width: 400px; }
   .live-name { font-size: 72px; }
   .live-weight { font-size: 120px; }
   .live-disc-chip,

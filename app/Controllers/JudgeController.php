@@ -156,6 +156,22 @@ class JudgeController extends Controller
         $disciplineId = (int) ($_GET['discipline'] ?? ($disciplines[0]['id'] ?? 0));
         $discipline = Discipline::find($disciplineId) ?? $disciplines[0] ?? null;
 
+        // Армрестлинг — своя таблица мест/боёв + модалка судейства
+        if ($discipline && ($discipline['scoring_type'] ?? '') === 'arm') {
+            $board = ArmMatch::boardData((int) $discipline['id']);
+            $this->view('judge/protocol_arm', [
+                'disciplines'  => $disciplines,
+                'discipline'   => $discipline,
+                'armProtocol'  => ArmMatch::buildProtocol((int) $discipline['id']),
+                'byCategory'   => $board['byCategory'],
+                'wins'         => $board['wins'],
+                'flash'        => $this->takeFlash(),
+                'judgeName'    => $_SESSION['judge_name'] ?? 'Судья',
+                'wide'         => true,
+            ]);
+            return;
+        }
+
         $participants = $discipline
             ? Participant::registeredFor((int) $discipline['id'])
             : [];
@@ -167,32 +183,151 @@ class JudgeController extends Controller
             }
         }
 
+        $queue = $discipline
+            ? PlatformQueue::forDiscipline((int) $discipline['id'])
+            : [];
+
+        $requestedKey = trim($_GET['current'] ?? '');
+        $storedKey = $discipline
+            ? PlatformState::getCurrent((int) $discipline['id'])
+            : null;
+
+        $current = null;
+        if ($queue) {
+            $wantKey = $requestedKey !== '' ? $requestedKey : (string) ($storedKey ?? '');
+            if ($wantKey !== '') {
+                foreach ($queue as $item) {
+                    $key = (string) ($item['queue_key'] ?? ((int) $item['participant_id'] . '-' . (int) $item['attempt_no']));
+                    if ($key === $wantKey) {
+                        $current = $item;
+                        break;
+                    }
+                }
+            }
+            $current = $current ?? $queue[0];
+        }
+
+        if ($discipline) {
+            PlatformState::setCurrent(
+                (int) $discipline['id'],
+                $current['queue_key'] ?? (
+                    $current
+                        ? ((int) $current['participant_id'] . '-' . (int) $current['attempt_no'])
+                        : null
+                )
+            );
+        }
+
+        $bar = null;
+        $category = null;
+        $attemptsAllowed = (int) ($discipline['attempts_allowed'] ?? 3);
+        $isFolk = FolkBench::isFolk($discipline);
+        if ($current && (
+            ($discipline['scoring_type'] ?? '') === 'weight' || $isFolk
+        )) {
+            $bar = BarLoader::forWeight((float) $current['declared_weight']);
+        }
+        if ($current) {
+            $category = $current['weight_category']
+                ?: WeightCategory::forDiscipline(
+                    $discipline,
+                    (string) ($current['age_group'] ?? 'open'),
+                    (float) $current['body_weight']
+                );
+        }
+
+        $orderPid = (int) ($_GET['order_pid'] ?? 0);
+        $orderAttempt = (int) ($_GET['order_attempt'] ?? 0);
+        $orderBase = str_replace(',', '.', trim((string) ($_GET['order_base'] ?? '')));
+        $orderName = '';
+        if ($orderPid > 0) {
+            $op = Participant::find($orderPid);
+            $orderName = $op['full_name'] ?? '';
+        }
+
+        $protocolData = $discipline
+            ? \App\Models\PowerProtocol::buildProtocol($discipline, $participants, $attemptsMap, $queue, $current)
+            : ['categories' => [], 'total_athletes' => 0, 'judged_attempts' => 0];
+
+        $records = \App\Models\PowerProtocol::records($discipline['name_ru'] ?? 'Любители Жим штанги лежа без экипировки');
+        $normatives = \App\Models\PowerProtocol::normatives($discipline['code'] ?? 'bench');
+
         $this->view('judge/dashboard', [
-            'disciplines'  => $disciplines,
-            'discipline'   => $discipline,
-            'participants' => $participants,
-            'attemptsMap'  => $attemptsMap,
-            'flash'        => $this->takeFlash(),
-            'judgeName'    => $_SESSION['judge_name'] ?? 'Судья',
-            'wide'         => true,
+            'disciplines'     => $disciplines,
+            'discipline'      => $discipline,
+            'participants'    => $participants,
+            'attemptsMap'     => $attemptsMap,
+            'protocolData'    => $protocolData,
+            'records'         => $records,
+            'normatives'      => $normatives,
+            'queue'           => $queue,
+            'current'         => $current,
+            'bar'             => $bar,
+            'category'        => $category,
+            'attemptsAllowed' => $attemptsAllowed,
+            'isFolk'          => $isFolk,
+            'orderPid'        => $orderPid,
+            'orderAttempt'    => $orderAttempt,
+            'orderBase'       => is_numeric($orderBase) ? (float) $orderBase : null,
+            'orderName'       => $orderName,
+            'flash'           => $this->takeFlash(),
+            'judgeName'       => $_SESSION['judge_name'] ?? 'Судья',
+            'wide'            => true,
         ]);
+    }
+
+    private function judgeBackUrl(int $disciplineId): string
+    {
+        $from = trim($_POST['from'] ?? $_GET['from'] ?? '');
+        if ($from === 'protocol') {
+            return '/judge/protocol?discipline=' . $disciplineId;
+        }
+        return '/judge?discipline=' . $disciplineId;
     }
 
     public function saveAttempt(): void
     {
         $this->requireJudge();
 
+        $isAjax = (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest')
+            || (str_contains($_SERVER['HTTP_ACCEPT'] ?? '', 'application/json'))
+            || isset($_POST['ajax']);
+
         $participantId = (int) ($_POST['participant_id'] ?? 0);
         $disciplineId  = (int) ($_POST['discipline_id'] ?? 0);
         $attemptNo     = (int) ($_POST['attempt_no'] ?? 1);
         $rawValue      = str_replace(',', '.', trim($_POST['value'] ?? ''));
-        $isValid       = isset($_POST['is_valid']) && $_POST['is_valid'] === '1';
+        $isValid       = isset($_POST['is_valid']) && ((string) $_POST['is_valid'] === '1' || $_POST['is_valid'] === 1 || $_POST['is_valid'] === true);
         $from          = trim($_POST['from'] ?? '');
+        $action        = trim($_POST['action'] ?? '');
 
         $discipline = Discipline::find($disciplineId);
         if (!$discipline || !$participantId) {
+            if ($isAjax) {
+                http_response_code(422);
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode(['ok' => false, 'error' => 'Некорректные данные']);
+                exit;
+            }
             $this->flash('danger', 'Некорректные данные');
             $this->redirect('/judge');
+        }
+
+        if ($action === 'clear') {
+            Attempt::delete($participantId, $disciplineId, $attemptNo);
+            if ($isAjax) {
+                header('Content-Type: application/json; charset=utf-8');
+                echo json_encode([
+                    'ok'             => true,
+                    'action'         => 'cleared',
+                    'participant_id' => $participantId,
+                    'discipline_id'  => $disciplineId,
+                    'attempt_no'     => $attemptNo,
+                ]);
+                exit;
+            }
+            $this->flash('success', 'Попытка очищена');
+            $this->redirect('/judge/protocol?discipline=' . $disciplineId);
         }
 
         $value = null;
@@ -205,6 +340,20 @@ class JudgeController extends Controller
         }
 
         Attempt::upsert($participantId, $disciplineId, $attemptNo, $value, $isValid, $value);
+
+        if ($isAjax) {
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode([
+                'ok'             => true,
+                'participant_id' => $participantId,
+                'discipline_id'  => $disciplineId,
+                'attempt_no'     => $attemptNo,
+                'value'          => $value,
+                'value_fmt'      => $value !== null ? str_replace('.', ',', (string) $value) : '',
+                'is_valid'       => $isValid,
+            ]);
+            exit;
+        }
 
         $this->flash('success', 'Попытка сохранена');
         if ($from === 'platform') {
@@ -225,7 +374,7 @@ class JudgeController extends Controller
         $result        = trim($_POST['result'] ?? '');
         $mode          = trim($_POST['mode'] ?? 'weight');
 
-        $back = '/judge?discipline=' . $disciplineId;
+        $back = $this->judgeBackUrl($disciplineId);
         $discipline = Discipline::find($disciplineId);
 
         if (!$participantId || !$discipline) {
@@ -263,7 +412,7 @@ class JudgeController extends Controller
                     ? ' · штанга ' . number_format($barWeight, 1, '.', '') . ' кг'
                     : '')
             );
-            $this->redirect($back);
+            $this->redirect($back . (str_contains($back, 'protocol') ? '&open_stage=1' : ''));
         }
 
         if (!is_numeric($rawWeight) || (float) $rawWeight <= 0) {
@@ -296,11 +445,12 @@ class JudgeController extends Controller
                 . '&order_pid=' . $participantId
                 . '&order_attempt=' . $next
                 . '&order_base=' . rawurlencode(number_format($weight, 1, '.', ''))
+                . '&open_stage=1'
             );
         }
 
         $this->flash('success', $label . ' · попытка ' . $attemptNo . ' (последняя)');
-        $this->redirect($back);
+        $this->redirect($back . (str_contains($back, 'protocol') ? '&open_stage=1' : ''));
     }
 
     public function deferLift(): void
@@ -312,7 +462,7 @@ class JudgeController extends Controller
         $attemptNo     = (int) ($_POST['attempt_no'] ?? 1);
         $action        = trim($_POST['action'] ?? 'defer');
 
-        $back = '/judge?discipline=' . $disciplineId;
+        $back = $this->judgeBackUrl($disciplineId);
         if (!$participantId || !$disciplineId) {
             $this->flash('danger', 'Некорректные данные');
             $this->redirect($back);
@@ -322,15 +472,17 @@ class JudgeController extends Controller
         $participant = Participant::find($participantId);
         $name = $participant['full_name'] ?? ('#' . $participantId);
 
+        $stageQs = str_contains($back, 'protocol') ? '&open_stage=1' : '';
+
         if ($action === 'undefer') {
             PlatformQueue::undefer($disciplineId, $key);
             $this->flash('success', $name . ' снова в очереди');
-            $this->redirect($back . '&current=' . urlencode($key));
+            $this->redirect($back . '&current=' . urlencode($key) . $stageQs);
         }
 
         PlatformQueue::defer($disciplineId, $key);
         $this->flash('warning', $name . ' — ещё не пришёл, вызван следующий');
-        $this->redirect($back);
+        $this->redirect($back . $stageQs);
     }
 
     public function orderAttempt(): void
@@ -342,7 +494,7 @@ class JudgeController extends Controller
         $attemptNo     = (int) ($_POST['attempt_no'] ?? 0);
         $rawWeight     = str_replace(',', '.', trim($_POST['weight'] ?? ''));
 
-        $back = '/judge?discipline=' . $disciplineId;
+        $back = $this->judgeBackUrl($disciplineId);
 
         $discipline = Discipline::find($disciplineId);
         $max = (int) ($discipline['attempts_allowed'] ?? 3);
@@ -362,7 +514,7 @@ class JudgeController extends Controller
             'Заказан вес на попытку #' . $attemptNo . ': '
             . number_format((float) $rawWeight, 1, '.', '') . ' кг'
         );
-        $this->redirect($back);
+        $this->redirect($back . (str_contains($back, 'protocol') ? '&open_stage=1' : ''));
     }
 
     public function arm(): void
@@ -375,39 +527,20 @@ class JudgeController extends Controller
             $this->redirect('/judge');
         }
 
-        $did = (int) $discipline['id'];
-        $eligible = ArmMatch::eligibleByCategory($did);
-        $matches = ArmMatch::allForDiscipline($did);
-        $wins = ArmMatch::winCounts($did);
+        // Судейство — модалка на протоколе
+        $this->redirect('/judge/protocol?discipline=' . (int) $discipline['id'] . '&open_arm=1');
+    }
 
-        $byCategory = [];
-        foreach ($matches as $m) {
-            $cat = $m['weight_category'];
-            $round = (int) $m['round_no'];
-            $byCategory[$cat]['rounds'][$round][] = $m;
-            $byCategory[$cat]['max_round'] = max(
-                (int) ($byCategory[$cat]['max_round'] ?? 0),
-                $round
-            );
+    private function armBackUrl(): string
+    {
+        $discipline = ArmMatch::discipline();
+        $did = (int) ($discipline['id'] ?? 0);
+        if (($_POST['return'] ?? '') === 'protocol' && $did > 0) {
+            return '/judge/protocol?discipline=' . $did . '&open_arm=1';
         }
-
-        foreach ($eligible as $cat => $people) {
-            if (!isset($byCategory[$cat])) {
-                $byCategory[$cat] = ['rounds' => [], 'max_round' => 0];
-            }
-            $byCategory[$cat]['people'] = $people;
-        }
-
-        ksort($byCategory);
-
-        $this->view('judge/arm', [
-            'discipline'  => $discipline,
-            'byCategory'  => $byCategory,
-            'wins'        => $wins,
-            'flash'       => $this->takeFlash(),
-            'judgeName'   => $_SESSION['judge_name'] ?? 'Судья',
-            'wide'        => true,
-        ]);
+        return $did > 0
+            ? '/judge/protocol?discipline=' . $did . '&open_arm=1'
+            : '/judge';
     }
 
     public function armGenerate(): void
@@ -418,7 +551,7 @@ class JudgeController extends Controller
         $category = trim($_POST['category'] ?? '');
         if (!$discipline || $category === '') {
             $this->flash('danger', 'Укажите категорию');
-            $this->redirect('/judge/arm');
+            $this->redirect($this->armBackUrl());
         }
 
         try {
@@ -431,7 +564,7 @@ class JudgeController extends Controller
         } catch (\Throwable $e) {
             $this->flash('danger', $e->getMessage());
         }
-        $this->redirect('/judge/arm');
+        $this->redirect($this->armBackUrl());
     }
 
     public function armWinner(): void
@@ -455,7 +588,7 @@ class JudgeController extends Controller
         } catch (\Throwable $e) {
             $this->flash('danger', $e->getMessage());
         }
-        $this->redirect('/judge/arm');
+        $this->redirect($this->armBackUrl());
     }
 
     public function armCurrent(): void
@@ -469,7 +602,7 @@ class JudgeController extends Controller
         } catch (\Throwable $e) {
             $this->flash('danger', $e->getMessage());
         }
-        $this->redirect('/judge/arm');
+        $this->redirect($this->armBackUrl());
     }
 
     public function weighInForm(): void
