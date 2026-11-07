@@ -362,10 +362,19 @@ class PowerProtocol
                 : '';
 
             $barWeight = null;
-            if ($isFolk && $bw !== null) {
-                $barWeight = FolkBench::barWeight($bw);
-            } elseif ($isFolk && $qInfo && (float) ($qInfo['declared_weight'] ?? 0) > 0) {
-                $barWeight = (float) $qInfo['declared_weight'];
+            if ($isFolk) {
+                // Сначала заявленный/сохранённый вес штанги (админ / взвешивание), иначе ½ с/в
+                $declaredBar = null;
+                if ($qInfo && (float) ($qInfo['declared_weight'] ?? 0) > 0) {
+                    $declaredBar = (float) $qInfo['declared_weight'];
+                } elseif (!empty($attemptsMap[$pid][1]['declared_weight'])) {
+                    $declaredBar = (float) $attemptsMap[$pid][1]['declared_weight'];
+                }
+                if ($declaredBar !== null && $declaredBar > 0) {
+                    $barWeight = $declaredBar;
+                } elseif ($bw !== null) {
+                    $barWeight = FolkBench::barWeight($bw);
+                }
             }
 
             $athleteRow = [

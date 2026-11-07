@@ -3,9 +3,18 @@ $base = $config['base_url'] ?? '';
 $p = $participant;
 $selected = $selected ?? [];
 $statuses = $statuses ?? [];
+$registrations = $registrations ?? [];
 $pid = (int) $p['id'];
 $st = $p['status'] ?? 'pending';
 $stLabel = $statuses[$st] ?? $st;
+
+$regByDid = [];
+foreach ($registrations as $reg) {
+    $regByDid[(int) $reg['discipline_id']] = $reg;
+}
+$bwNum = ($p['body_weight'] !== null && (float) $p['body_weight'] > 0)
+    ? (float) $p['body_weight']
+    : null;
 ?>
 
 <div class="mx-auto w-full max-w-3xl">
@@ -113,16 +122,60 @@ $stLabel = $statuses[$st] ?? $st;
 
     <div class="card mb-4">
       <div class="card-body">
-        <h2 class="mb-3 text-lg font-semibold">Дисциплины</h2>
-        <div class="flex flex-col gap-2">
+        <h2 class="mb-3 text-lg font-semibold">Дисциплины и стартовые веса</h2>
+        <p class="mb-4 text-sm text-muted">
+          Для народного жима можно задать вес штанги вручную (шаг 2.5 кг). Пустое поле при наличии с/в — авто ½ с/в.
+        </p>
+        <div class="flex flex-col gap-3">
           <?php foreach ($disciplines as $d): ?>
-            <?php $did = (int) $d['id']; ?>
-            <div class="flex items-center gap-2">
-              <input class="check" type="checkbox"
-                     name="disciplines[]" value="<?= $did ?>"
-                     id="d<?= $did ?>"
-                     <?= in_array($did, $selected, true) ? 'checked' : '' ?>>
-              <label for="d<?= $did ?>"><?= htmlspecialchars($d['name_ru']) ?></label>
+            <?php
+              $did = (int) $d['id'];
+              $code = (string) ($d['code'] ?? '');
+              $scoring = (string) ($d['scoring_type'] ?? 'weight');
+              $isFolk = $code === \App\Models\FolkBench::CODE;
+              $showOpening = $isFolk || $scoring === 'weight';
+              $checked = in_array($did, $selected, true);
+              $reg = $regByDid[$did] ?? null;
+              $openingRaw = $reg['opening_weight'] ?? null;
+              if ($isFolk && ($openingRaw === null || $openingRaw === '') && $bwNum !== null) {
+                  $openingRaw = \App\Models\FolkBench::barWeight($bwNum);
+              }
+              $openingVal = ($openingRaw !== null && $openingRaw !== '')
+                  ? number_format((float) $openingRaw, 1, '.', '')
+                  : '';
+              $step = $isFolk ? '2.5' : ($scoring === 'weight' ? '0.5' : '1');
+            ?>
+            <div class="admin-disc-row rounded-lg border border-[color-mix(in_srgb,var(--ink)_12%,transparent)] p-3"
+                 data-disc-row
+                 data-folk="<?= $isFolk ? '1' : '0' ?>">
+              <div class="flex flex-wrap items-center gap-3">
+                <div class="flex min-w-[12rem] flex-1 items-center gap-2">
+                  <input class="check" type="checkbox"
+                         name="disciplines[]" value="<?= $did ?>"
+                         id="d<?= $did ?>"
+                         data-disc-check
+                         <?= $checked ? 'checked' : '' ?>>
+                  <label for="d<?= $did ?>"><?= htmlspecialchars($d['name_ru']) ?></label>
+                </div>
+                <?php if ($showOpening): ?>
+                  <div class="flex items-center gap-2" data-opening-wrap
+                       style="<?= $checked ? '' : 'display:none' ?>">
+                    <label class="text-sm text-muted whitespace-nowrap" for="opening<?= $did ?>">
+                      <?= $isFolk ? 'Штанга, кг' : 'Старт, кг' ?>
+                    </label>
+                    <input class="field w-24" type="number"
+                           id="opening<?= $did ?>"
+                           name="opening[<?= $did ?>]"
+                           step="<?= $step ?>" min="0" inputmode="decimal"
+                           <?= $isFolk ? 'data-folk-opening' : '' ?>
+                           value="<?= htmlspecialchars($openingVal) ?>"
+                           placeholder="<?= $isFolk ? '½ с/в' : '—' ?>">
+                  </div>
+                <?php endif; ?>
+              </div>
+              <?php if ($isFolk): ?>
+                <p class="mt-2 text-xs text-muted">½ собственного веса, округление до 2.5 кг — можно изменить</p>
+              <?php endif; ?>
             </div>
           <?php endforeach; ?>
         </div>
@@ -151,3 +204,51 @@ $stLabel = $statuses[$st] ?? $st;
 </div>
 
 <script src="<?= htmlspecialchars($base) ?>/js/phone-mask.js"></script>
+<script>
+(function () {
+  function halfBar(bw) {
+    var half = bw / 2;
+    return Math.round(half / 2.5) * 2.5;
+  }
+
+  document.querySelectorAll('[data-disc-row]').forEach(function (row) {
+    var check = row.querySelector('[data-disc-check]');
+    var wrap = row.querySelector('[data-opening-wrap]');
+    if (!check || !wrap) return;
+    check.addEventListener('change', function () {
+      wrap.style.display = check.checked ? '' : 'none';
+    });
+  });
+
+  var bwInput = document.getElementById('body_weight');
+  if (!bwInput) return;
+
+  function syncFolk() {
+    var raw = String(bwInput.value || '').replace(',', '.');
+    if (!raw || isNaN(raw) || Number(raw) <= 0) return;
+    var suggested = halfBar(Number(raw)).toFixed(1);
+    document.querySelectorAll('[data-folk-opening]').forEach(function (el) {
+      var row = el.closest('[data-disc-row]');
+      var check = row && row.querySelector('[data-disc-check]');
+      if (check && !check.checked) return;
+      // Не затираем ручной ввод, если уже отличается от прошлой авто-подсказки
+      if (el.dataset.auto === '0' && el.value !== '' && el.value !== el.dataset.lastAuto) {
+        return;
+      }
+      el.value = suggested;
+      el.dataset.lastAuto = suggested;
+      el.dataset.auto = '1';
+    });
+  }
+
+  document.querySelectorAll('[data-folk-opening]').forEach(function (el) {
+    el.dataset.lastAuto = el.value || '';
+    el.dataset.auto = '1';
+    el.addEventListener('input', function () {
+      el.dataset.auto = '0';
+    });
+  });
+
+  bwInput.addEventListener('input', syncFolk);
+})();
+</script>

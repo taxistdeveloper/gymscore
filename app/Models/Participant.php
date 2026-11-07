@@ -344,8 +344,17 @@ class Participant
         return self::groupedByDiscipline(self::STATUS_PENDING, '', $disciplineId);
     }
 
-    public static function update(int $id, array $data, array $disciplineIds, array $disciplineCategories = []): void
-    {
+    /**
+     * @param array<int, string|null> $disciplineCategories
+     * @param array<int, float|null>  $openings discipline_id => стартовый вес (null = оставить/пусто)
+     */
+    public static function update(
+        int $id,
+        array $data,
+        array $disciplineIds,
+        array $disciplineCategories = [],
+        ?array $openings = null
+    ): void {
         $pdo = Database::pdo();
         $pdo->beginTransaction();
         try {
@@ -375,15 +384,55 @@ class Participant
                 $existing[(int) $row['discipline_id']] = $row;
             }
 
+            $codes = [];
+            foreach (Discipline::all() as $d) {
+                $codes[(int) $d['id']] = (string) ($d['code'] ?? '');
+            }
+
             $pdo->prepare('DELETE FROM registrations WHERE participant_id = ?')->execute([$id]);
             $reg = $pdo->prepare(
                 'INSERT INTO registrations (participant_id, discipline_id, opening_weight, weight_category) VALUES (?, ?, ?, ?)'
             );
+            $declare = $pdo->prepare(
+                'INSERT INTO attempts
+                   (participant_id, discipline_id, attempt_no, declared_weight, value, is_valid)
+                 VALUES (?, ?, 1, ?, NULL, 1)
+                 ON DUPLICATE KEY UPDATE
+                   declared_weight = IF(value IS NULL, VALUES(declared_weight), declared_weight)'
+            );
+
+            $bw = isset($data['body_weight']) && $data['body_weight'] !== null
+                ? (float) $data['body_weight']
+                : 0.0;
+
             foreach ($disciplineIds as $did) {
                 $didInt = (int) $did;
-                $opening = $existing[$didInt]['opening_weight'] ?? null;
                 $cat = $disciplineCategories[$didInt] ?? ($existing[$didInt]['weight_category'] ?? null);
-                $reg->execute([$id, $didInt, $opening, $cat]);
+
+                if ($openings !== null && array_key_exists($didInt, $openings)) {
+                    $opening = $openings[$didInt];
+                } else {
+                    $opening = $existing[$didInt]['opening_weight'] ?? null;
+                }
+
+                // Народный: если вес не задан админом, но есть с/в — подставить ½ с/в
+                if (
+                    ($opening === null || $opening === '')
+                    && ($codes[$didInt] ?? '') === FolkBench::CODE
+                    && $bw > 0
+                ) {
+                    $opening = FolkBench::barWeight($bw);
+                }
+
+                $openingVal = $opening !== null && $opening !== ''
+                    ? round((float) $opening, 2)
+                    : null;
+
+                $reg->execute([$id, $didInt, $openingVal, $cat]);
+
+                if ($openingVal !== null) {
+                    $declare->execute([$id, $didInt, $openingVal]);
+                }
             }
 
             $pdo->commit();
@@ -661,10 +710,14 @@ class Participant
                    declared_weight = VALUES(declared_weight)'
             );
 
-            // Народный жим: штанга всегда = ½ собственного веса
+            // Народный жим: если вес не передали — ½ с/в (шаг 2.5); иначе оставляем ручной
             foreach (self::registrationsWithDisciplines($id) as $reg) {
-                if (($reg['code'] ?? '') === FolkBench::CODE) {
-                    $openings[(int) $reg['discipline_id']] = FolkBench::barWeight($bodyWeight);
+                if (($reg['code'] ?? '') !== FolkBench::CODE) {
+                    continue;
+                }
+                $did = (int) $reg['discipline_id'];
+                if (!array_key_exists($did, $openings) || $openings[$did] === null || $openings[$did] === '') {
+                    $openings[$did] = FolkBench::barWeight($bodyWeight);
                 }
             }
 

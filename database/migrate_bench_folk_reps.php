@@ -29,13 +29,13 @@ $st = $pdo->prepare(
 $st->execute();
 echo "bench_folk → reps, 1 attempt ({$st->rowCount()} row)\n";
 
-// ROUND(x*2)/2 в SQL: половина с/в до 0.5 кг
+// ROUND(bw/5)*2.5: половина с/в до шага 2.5 кг
 $updReg = $pdo->exec(
     "UPDATE registrations r
      JOIN disciplines d ON d.id = r.discipline_id AND d.code = 'bench_folk'
      JOIN participants p ON p.id = r.participant_id
-     SET r.opening_weight = ROUND(p.body_weight) / 2
-     WHERE p.weighed_at IS NOT NULL"
+     SET r.opening_weight = ROUND(p.body_weight / 5) * 2.5
+     WHERE p.weighed_at IS NOT NULL AND p.body_weight > 0"
 );
 echo "registrations opening_weight synced ({$updReg} row)\n";
 
@@ -43,8 +43,8 @@ $updAtt = $pdo->exec(
     "UPDATE attempts a
      JOIN disciplines d ON d.id = a.discipline_id AND d.code = 'bench_folk'
      JOIN participants p ON p.id = a.participant_id
-     SET a.declared_weight = ROUND(p.body_weight) / 2
-     WHERE a.attempt_no = 1 AND a.value IS NULL"
+     SET a.declared_weight = ROUND(p.body_weight / 5) * 2.5
+     WHERE a.attempt_no = 1 AND a.value IS NULL AND p.body_weight > 0"
 );
 echo "undeclared attempt #1 declared_weight synced ({$updAtt} row)\n";
 

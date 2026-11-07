@@ -82,17 +82,18 @@ $listHref = $base . '/judge/weigh-in?filter=' . urlencode($filter)
                 $catMax = WeightCategory::maxFromLabel($catLive);
                 $opening = $reg['opening_weight'];
 
-                if ($isFolk && $bw !== '') {
-                    $openingVal = number_format(
-                        \App\Models\FolkBench::barWeight((float) $bw),
-                        1,
-                        '.',
-                        ''
-                    );
-                } elseif ($opening !== null && $opening !== '') {
+                if ($opening !== null && $opening !== '') {
+                    // Уже задано (админ / предыдущее взвешивание)
                     $openingVal = number_format(
                         (float) $opening,
                         $scoring === 'weight' || $isFolk ? 1 : 0,
+                        '.',
+                        ''
+                    );
+                } elseif ($isFolk && $bw !== '') {
+                    $openingVal = number_format(
+                        \App\Models\FolkBench::barWeight((float) $bw),
+                        1,
                         '.',
                         ''
                     );
@@ -109,7 +110,7 @@ $listHref = $base . '/judge/weigh-in?filter=' . urlencode($filter)
                   <div class="weigh-opening-cat"><?= htmlspecialchars($catLive) ?></div>
                   <?php if ($isFolk): ?>
                     <div class="weigh-opening-hint text-sm text-muted">
-                      Штанга = ½ собственного веса · на помосте считают повторы
+                      По умолчанию ½ с/в (шаг 2.5 кг) — можно изменить · на помосте считают повторы
                     </div>
                   <?php elseif ($scoring === 'weight' && $opening === null && $catMax !== null): ?>
                     <div class="weigh-opening-hint text-sm text-muted">
@@ -122,7 +123,7 @@ $listHref = $base . '/judge/weigh-in?filter=' . urlencode($filter)
                     <input class="weigh-opening-input" type="number"
                            name="opening[<?= $did ?>]"
                            data-folk-half
-                           step="0.5" min="0" readonly tabindex="-1"
+                           step="2.5" min="0"
                            inputmode="decimal"
                            value="<?= htmlspecialchars($openingVal) ?>"
                            placeholder="—">
@@ -162,20 +163,38 @@ $listHref = $base . '/judge/weigh-in?filter=' . urlencode($filter)
   if (!input) return;
 
   function halfBar(bw) {
-    return Math.round(bw) / 2;
+    // ½ с/в, шаг 2.5 кг (как на помосте)
+    var half = bw / 2;
+    return Math.round(half / 2.5) * 2.5;
   }
 
-  function updateFolk() {
+  document.querySelectorAll('[data-folk-half]').forEach(function (el) {
+    var initial = el.value || '';
+    el.dataset.lastAuto = initial;
+    // Если уже стоит сохранённый вес — не затирать при первом автосинхе
+    el.dataset.auto = initial ? '0' : '1';
+    el.addEventListener('input', function () {
+      el.dataset.auto = '0';
+    });
+  });
+
+  function updateFolk(force) {
     var raw = String(input.value || '').replace(',', '.');
     if (!raw || isNaN(raw) || Number(raw) <= 0) return;
-    var bw = Number(raw);
+    var suggested = halfBar(Number(raw)).toFixed(1);
     document.querySelectorAll('[data-folk-half]').forEach(function (el) {
-      el.value = halfBar(bw).toFixed(1);
+      if (!force && el.dataset.auto === '0' && el.value !== '') {
+        return;
+      }
+      el.value = suggested;
+      el.dataset.lastAuto = suggested;
+      el.dataset.auto = '1';
     });
   }
 
-  input.addEventListener('input', updateFolk);
+  input.addEventListener('input', function () {
+    updateFolk(false);
+  });
   input.focus();
-  if (input.value) updateFolk();
 })();
 </script>

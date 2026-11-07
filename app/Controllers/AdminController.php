@@ -5,8 +5,10 @@ namespace App\Controllers;
 use App\Core\Controller;
 use App\Core\Database;
 use App\Models\Discipline;
+use App\Models\FolkBench;
 use App\Models\Participant;
 use App\Models\StaffAccount;
+use App\Models\WeightCategory;
 
 class AdminController extends Controller
 {
@@ -149,6 +151,43 @@ class AdminController extends Controller
             }
         }
 
+        $openings = [];
+        $rawOpenings = $_POST['opening'] ?? [];
+        $discById = [];
+        foreach (Discipline::all() as $d) {
+            $discById[(int) $d['id']] = $d;
+        }
+        if (is_array($rawOpenings)) {
+            foreach ($rawOpenings as $did => $raw) {
+                $did = (int) $did;
+                if (!in_array($did, $disciplineIds, true)) {
+                    continue;
+                }
+                $raw = str_replace(',', '.', trim((string) $raw));
+                if ($raw === '') {
+                    $openings[$did] = null;
+                    continue;
+                }
+                if (!is_numeric($raw) || (float) $raw < 0) {
+                    $this->flash('danger', 'Некорректный стартовый вес');
+                    $this->redirect('/admin/participants/' . $pid);
+                }
+                $openings[$did] = round((float) $raw, 2);
+            }
+        }
+        // Народный: если поле не пришло / пусто, но есть с/в — авто ½ с/в
+        foreach ($disciplineIds as $did) {
+            $code = (string) ($discById[$did]['code'] ?? '');
+            if ($code !== FolkBench::CODE) {
+                continue;
+            }
+            if (!array_key_exists($did, $openings) || $openings[$did] === null) {
+                if ($bodyWeight !== null) {
+                    $openings[$did] = FolkBench::barWeight($bodyWeight);
+                }
+            }
+        }
+
         Participant::update($pid, [
             'full_name'   => $name,
             'phone'       => $phone,
@@ -156,7 +195,7 @@ class AdminController extends Controller
             'gender'      => $gender,
             'birth_year'  => $birthYear !== '' ? (int) $birthYear : null,
             'age_group'   => $ageGroup !== '' ? $ageGroup : null,
-        ], $disciplineIds, $disciplineCategories);
+        ], $disciplineIds, $disciplineCategories, $openings);
 
         $this->flash('success', 'Данные заявки обновлены');
         $this->redirect('/admin/participants/' . $pid);
