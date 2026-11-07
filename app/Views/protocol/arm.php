@@ -58,8 +58,6 @@ $totalMatches = (int) ($armProtocol['total_matches'] ?? 0);
     </p>
 
     <div class="proto-actions">
-      <a class="btn-secondary-sm" href="<?= htmlspecialchars($base) ?>/results?discipline=<?= $did ?>">Места</a>
-      <a class="btn-primary-sm" href="<?= htmlspecialchars($base) ?>/live?discipline=<?= $did ?>" target="_blank" rel="noopener">Live</a>
       <button type="button" class="btn-secondary-sm" id="btnFullscreen" title="На весь экран" aria-label="На весь экран">⛶</button>
     </div>
   </div>
