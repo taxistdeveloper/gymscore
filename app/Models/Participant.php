@@ -642,13 +642,15 @@ class Participant
     }
 
     /**
-     * @param array<int, float|null> $openings discipline_id => opening weight
+     * @param array<int, float|null> $openings      discipline_id => opening weight
+     * @param list<int>|null         $disciplineIds если передан — синхронизируем заявки на дисциплины
      */
     public static function saveWeighIn(
         int $id,
         float $bodyWeight,
         ?string $weighNote = null,
-        array $openings = []
+        array $openings = [],
+        ?array $disciplineIds = null
     ): void {
         $participant = self::find($id);
         if (!$participant || ($participant['status'] ?? '') !== self::STATUS_APPROVED) {
@@ -657,6 +659,11 @@ class Participant
 
         // Категорию не пересчитываем по весу на весах — берём выбранную при регистрации.
         $regs = self::registrationsWithDisciplines($id);
+        $existing = [];
+        foreach ($regs as $reg) {
+            $existing[(int) $reg['discipline_id']] = $reg;
+        }
+
         $primaryCat = trim((string) ($participant['weight_category'] ?? ''));
         if ($primaryCat === '') {
             foreach ($regs as $reg) {
@@ -671,6 +678,27 @@ class Participant
             $primaryCat = WeightCategory::labelFor(
                 (string) ($participant['gender'] ?? 'M'),
                 $bodyWeight
+            );
+        }
+
+        $codes = [];
+        foreach (Discipline::all() as $d) {
+            $codes[(int) $d['id']] = (string) ($d['code'] ?? '');
+        }
+
+        if ($disciplineIds !== null) {
+            $disciplineIds = array_values(array_unique(array_map('intval', $disciplineIds)));
+            $disciplineIds = array_values(array_filter(
+                $disciplineIds,
+                static fn (int $did): bool => isset($codes[$did])
+            ));
+            if ($disciplineIds === []) {
+                throw new \InvalidArgumentException('Выберите хотя бы одну дисциплину');
+            }
+        } else {
+            $disciplineIds = array_map(
+                static fn (array $reg): int => (int) $reg['discipline_id'],
+                $regs
             );
         }
 
@@ -698,34 +726,48 @@ class Participant
                     ->execute([$lot, $id]);
             }
 
-            $upd = $pdo->prepare(
-                'UPDATE registrations SET opening_weight = ?
-                 WHERE participant_id = ? AND discipline_id = ?'
+            // Синхронизация дисциплин (можно сменить на взвешивании)
+            $pdo->prepare('DELETE FROM registrations WHERE participant_id = ?')->execute([$id]);
+            $ins = $pdo->prepare(
+                'INSERT INTO registrations (participant_id, discipline_id, opening_weight, weight_category)
+                 VALUES (?, ?, ?, ?)'
             );
             $declare = $pdo->prepare(
                 'INSERT INTO attempts
                    (participant_id, discipline_id, attempt_no, declared_weight, value, is_valid)
                  VALUES (?, ?, 1, ?, NULL, 1)
                  ON DUPLICATE KEY UPDATE
-                   declared_weight = VALUES(declared_weight)'
+                   declared_weight = IF(value IS NULL, VALUES(declared_weight), declared_weight)'
             );
 
-            // Народный жим: если вес не передали — ½ с/в (шаг 2.5); иначе оставляем ручной
-            foreach (self::registrationsWithDisciplines($id) as $reg) {
-                if (($reg['code'] ?? '') !== FolkBench::CODE) {
-                    continue;
+            foreach ($disciplineIds as $did) {
+                $prevOpening = $existing[$did]['opening_weight'] ?? null;
+                $cat = trim((string) ($existing[$did]['weight_category'] ?? ''));
+                if ($cat === '') {
+                    $cat = $primaryCat;
                 }
-                $did = (int) $reg['discipline_id'];
-                if (!array_key_exists($did, $openings) || $openings[$did] === null || $openings[$did] === '') {
-                    $openings[$did] = FolkBench::barWeight($bodyWeight);
-                }
-            }
 
-            foreach ($openings as $disciplineId => $value) {
-                $w = $value !== null ? round((float) $value, 2) : null;
-                $upd->execute([$w, $id, (int) $disciplineId]);
+                if (array_key_exists($did, $openings)) {
+                    $opening = $openings[$did];
+                } else {
+                    $opening = $prevOpening;
+                }
+
+                // Народный жим: если вес не передали — ½ с/в (шаг 2.5)
+                if (
+                    ($opening === null || $opening === '')
+                    && ($codes[$did] ?? '') === FolkBench::CODE
+                ) {
+                    $opening = FolkBench::barWeight($bodyWeight);
+                }
+
+                $w = $opening !== null && $opening !== ''
+                    ? round((float) $opening, 2)
+                    : null;
+
+                $ins->execute([$id, $did, $w, $cat !== '' ? $cat : null]);
                 if ($w !== null) {
-                    $declare->execute([$id, (int) $disciplineId, $w]);
+                    $declare->execute([$id, $did, $w]);
                 }
             }
 

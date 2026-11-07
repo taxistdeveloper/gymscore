@@ -678,6 +678,7 @@ class JudgeController extends Controller
         $this->view('judge/weigh_in_card', [
             'participant'  => $participant,
             'registrations'=> $regs,
+            'disciplines'  => Discipline::all(),
             'filter'       => $filter,
             'q'            => $q,
             'disciplineId' => $disciplineId,
@@ -720,29 +721,61 @@ class JudgeController extends Controller
             $this->redirect($back);
         }
 
+        $disciplineIds = array_values(array_unique(array_map(
+            'intval',
+            $_POST['disciplines'] ?? []
+        )));
+        if ($disciplineIds === []) {
+            $this->flash('danger', 'Выберите хотя бы одну дисциплину');
+            $this->redirect($back);
+        }
+
+        $validIds = [];
+        foreach (Discipline::all() as $d) {
+            $validIds[(int) $d['id']] = true;
+        }
+        $disciplineIds = array_values(array_filter(
+            $disciplineIds,
+            static fn (int $did): bool => isset($validIds[$did])
+        ));
+        if ($disciplineIds === []) {
+            $this->flash('danger', 'Выберите хотя бы одну дисциплину');
+            $this->redirect($back);
+        }
+
         $openings = [];
         $rawOpenings = $_POST['opening'] ?? [];
         if (is_array($rawOpenings)) {
             foreach ($rawOpenings as $did => $raw) {
+                $did = (int) $did;
+                if (!in_array($did, $disciplineIds, true)) {
+                    continue;
+                }
                 $raw = str_replace(',', '.', trim((string) $raw));
                 if ($raw === '') {
-                    $openings[(int) $did] = null;
+                    $openings[$did] = null;
                     continue;
                 }
                 if (!is_numeric($raw) || (float) $raw < 0) {
                     $this->flash('danger', 'Некорректный стартовый вес');
                     $this->redirect($back);
                 }
-                $openings[(int) $did] = (float) $raw;
+                $openings[$did] = (float) $raw;
             }
         }
 
-        Participant::saveWeighIn(
-            $participantId,
-            (float) $bw,
-            $note !== '' ? $note : null,
-            $openings
-        );
+        try {
+            Participant::saveWeighIn(
+                $participantId,
+                (float) $bw,
+                $note !== '' ? $note : null,
+                $openings,
+                $disciplineIds
+            );
+        } catch (\InvalidArgumentException $e) {
+            $this->flash('danger', $e->getMessage());
+            $this->redirect($back);
+        }
 
         $updatedP = Participant::find($participantId) ?: $participant;
         $weightCategory = Participant::weighCategoryLabel($updatedP);

@@ -2070,8 +2070,27 @@ a.weigh-card.is-done { border-color: var(--ink); box-shadow: inset 3px 0 0 var(-
   align-items: center;
 }
 
-.weigh-opening-name { font-weight: 600; }
-.weigh-check { margin-right: 0.25rem; }
+.weigh-opening-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.weigh-check {
+  width: 1.05rem;
+  height: 1.05rem;
+  margin: 0;
+  accent-color: var(--signal);
+  flex-shrink: 0;
+}
+.weigh-opening-row.is-off {
+  opacity: 0.55;
+}
+.weigh-opening-row.is-off .weigh-opening-hint,
+.weigh-opening-row.is-off .weigh-opening-cat {
+  display: none;
+}
 
 @media (max-width: 576px) {
   .weigh-opening-row { grid-template-columns: 1fr; }

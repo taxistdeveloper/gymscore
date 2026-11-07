@@ -17,6 +17,12 @@ $registeredCategory = Participant::weighCategoryLabel($p);
 $listHref = $base . '/judge/weigh-in?filter=' . urlencode($filter)
     . ($disciplineId > 0 ? '&discipline=' . $disciplineId : '')
     . ($q !== '' ? '&q=' . urlencode($q) : '');
+
+$regByDid = [];
+foreach ($registrations ?? [] as $reg) {
+    $regByDid[(int) $reg['discipline_id']] = $reg;
+}
+$allDisciplines = $disciplines ?? [];
 ?>
 
 <div class="weigh-overlay">
@@ -61,16 +67,22 @@ $listHref = $base . '/judge/weigh-in?filter=' . urlencode($filter)
         <p class="weigh-hint">Фиксируется для протокола и народного жима (½ с/в). Категорию не пересчитывает.</p>
       </div>
 
-      <?php if (!empty($registrations)): ?>
+      <?php if (!empty($allDisciplines)): ?>
         <section class="weigh-openings">
-          <h2 class="weigh-openings-title">Стартовые веса на помост</h2>
+          <h2 class="weigh-openings-title">Дисциплины и стартовые веса</h2>
+          <p class="weigh-hint" style="margin-top:-0.35rem;margin-bottom:0.75rem">
+            Можно снять заявленную дисциплину и отметить другую — прямо на взвешивании.
+          </p>
 
           <div class="weigh-openings-list">
-            <?php foreach ($registrations as $reg): ?>
+            <?php foreach ($allDisciplines as $d): ?>
               <?php
-                $did = (int) $reg['discipline_id'];
-                $scoring = $reg['scoring_type'] ?? 'weight';
-                $isFolk = ($reg['code'] ?? '') === \App\Models\FolkBench::CODE;
+                $did = (int) $d['id'];
+                $reg = $regByDid[$did] ?? null;
+                $checked = $reg !== null;
+                $scoring = $d['scoring_type'] ?? 'weight';
+                $isFolk = ($d['code'] ?? '') === \App\Models\FolkBench::CODE;
+                $showOpening = $isFolk || $scoring === 'weight';
                 $unit = $isFolk ? 'кг' : match ($scoring) {
                     'reps' => 'раз',
                     'arm'  => 'побед',
@@ -80,10 +92,9 @@ $listHref = $base . '/judge/weigh-in?filter=' . urlencode($filter)
                     ? (string) $reg['weight_category']
                     : $registeredCategory;
                 $catMax = WeightCategory::maxFromLabel($catLive);
-                $opening = $reg['opening_weight'];
+                $opening = $reg['opening_weight'] ?? null;
 
                 if ($opening !== null && $opening !== '') {
-                    // Уже задано (админ / предыдущее взвешивание)
                     $openingVal = number_format(
                         (float) $opening,
                         $scoring === 'weight' || $isFolk ? 1 : 0,
@@ -98,45 +109,58 @@ $listHref = $base . '/judge/weigh-in?filter=' . urlencode($filter)
                         ''
                     );
                 } elseif ($scoring === 'weight' && !$isFolk && $catMax !== null) {
-                    // Стартовый вес «Жим лёжа» и т.п. — из категории регистрации
                     $openingVal = number_format($catMax, 1, '.', '');
                 } else {
                     $openingVal = '';
                 }
               ?>
-              <div class="weigh-opening-row<?= $isFolk ? ' is-folk' : '' ?>">
+              <div class="weigh-opening-row<?= $isFolk ? ' is-folk' : '' ?><?= $checked ? '' : ' is-off' ?>"
+                   data-disc-row
+                   data-folk="<?= $isFolk ? '1' : '0' ?>"
+                   data-scoring="<?= htmlspecialchars($scoring) ?>"
+                   data-cat-max="<?= $catMax !== null ? htmlspecialchars((string) $catMax) : '' ?>">
                 <div class="weigh-opening-info">
-                  <div class="weigh-opening-name"><?= htmlspecialchars($reg['name_ru']) ?></div>
+                  <label class="weigh-opening-name" for="disc<?= $did ?>">
+                    <input class="weigh-check" type="checkbox"
+                           name="disciplines[]" value="<?= $did ?>"
+                           id="disc<?= $did ?>"
+                           data-disc-check
+                           <?= $checked ? 'checked' : '' ?>>
+                    <?= htmlspecialchars($d['name_ru']) ?>
+                  </label>
                   <div class="weigh-opening-cat"><?= htmlspecialchars($catLive) ?></div>
                   <?php if ($isFolk): ?>
-                    <div class="weigh-opening-hint text-sm text-muted">
+                    <div class="weigh-opening-hint text-sm text-muted" data-opening-hint>
                       По умолчанию ½ с/в (шаг 2.5 кг) — можно изменить · на помосте считают повторы
                     </div>
-                  <?php elseif ($scoring === 'weight' && $opening === null && $catMax !== null): ?>
-                    <div class="weigh-opening-hint text-sm text-muted">
+                  <?php elseif ($scoring === 'weight'): ?>
+                    <div class="weigh-opening-hint text-sm text-muted" data-opening-hint>
                       Подставлено из категории регистрации — можно изменить
                     </div>
                   <?php endif; ?>
                 </div>
-                <div class="weigh-opening-input-wrap">
-                  <?php if ($isFolk): ?>
-                    <input class="weigh-opening-input" type="number"
-                           name="opening[<?= $did ?>]"
-                           data-folk-half
-                           step="2.5" min="0"
-                           inputmode="decimal"
-                           value="<?= htmlspecialchars($openingVal) ?>"
-                           placeholder="—">
-                  <?php else: ?>
-                    <input class="weigh-opening-input" type="number"
-                           name="opening[<?= $did ?>]"
-                           step="<?= $scoring === 'weight' ? '0.5' : '1' ?>"
-                           min="0" inputmode="decimal"
-                           value="<?= htmlspecialchars($openingVal) ?>"
-                           placeholder="—">
-                  <?php endif; ?>
-                  <span class="weigh-opening-unit"><?= htmlspecialchars($unit) ?></span>
-                </div>
+                <?php if ($showOpening): ?>
+                  <div class="weigh-opening-input-wrap" data-opening-wrap
+                       style="<?= $checked ? '' : 'display:none' ?>">
+                    <?php if ($isFolk): ?>
+                      <input class="weigh-opening-input" type="number"
+                             name="opening[<?= $did ?>]"
+                             data-folk-half
+                             step="2.5" min="0"
+                             inputmode="decimal"
+                             value="<?= htmlspecialchars($openingVal) ?>"
+                             placeholder="—">
+                    <?php else: ?>
+                      <input class="weigh-opening-input" type="number"
+                             name="opening[<?= $did ?>]"
+                             step="0.5"
+                             min="0" inputmode="decimal"
+                             value="<?= htmlspecialchars($openingVal) ?>"
+                             placeholder="—">
+                    <?php endif; ?>
+                    <span class="weigh-opening-unit"><?= htmlspecialchars($unit) ?></span>
+                  </div>
+                <?php endif; ?>
               </div>
             <?php endforeach; ?>
           </div>
@@ -160,18 +184,44 @@ $listHref = $base . '/judge/weigh-in?filter=' . urlencode($filter)
 <script>
 (function () {
   var input = document.getElementById('body_weight');
-  if (!input) return;
+  var form = document.getElementById('weighForm');
 
   function halfBar(bw) {
-    // ½ с/в, шаг 2.5 кг (как на помосте)
     var half = bw / 2;
     return Math.round(half / 2.5) * 2.5;
   }
 
+  document.querySelectorAll('[data-disc-row]').forEach(function (row) {
+    var check = row.querySelector('[data-disc-check]');
+    var wrap = row.querySelector('[data-opening-wrap]');
+    if (!check) return;
+
+    function syncRow() {
+      row.classList.toggle('is-off', !check.checked);
+      if (wrap) wrap.style.display = check.checked ? '' : 'none';
+      if (check.checked && wrap) {
+        var opening = wrap.querySelector('.weigh-opening-input');
+        if (opening && !opening.value) {
+          if (row.dataset.folk === '1' && input && input.value) {
+            var raw = String(input.value).replace(',', '.');
+            if (raw && !isNaN(raw) && Number(raw) > 0) {
+              opening.value = halfBar(Number(raw)).toFixed(1);
+              opening.dataset.auto = '1';
+              opening.dataset.lastAuto = opening.value;
+            }
+          } else if (row.dataset.scoring === 'weight' && row.dataset.catMax) {
+            opening.value = Number(row.dataset.catMax).toFixed(1);
+          }
+        }
+      }
+    }
+
+    check.addEventListener('change', syncRow);
+  });
+
   document.querySelectorAll('[data-folk-half]').forEach(function (el) {
     var initial = el.value || '';
     el.dataset.lastAuto = initial;
-    // Если уже стоит сохранённый вес — не затирать при первом автосинхе
     el.dataset.auto = initial ? '0' : '1';
     el.addEventListener('input', function () {
       el.dataset.auto = '0';
@@ -179,10 +229,15 @@ $listHref = $base . '/judge/weigh-in?filter=' . urlencode($filter)
   });
 
   function updateFolk(force) {
+    if (!input) return;
     var raw = String(input.value || '').replace(',', '.');
     if (!raw || isNaN(raw) || Number(raw) <= 0) return;
     var suggested = halfBar(Number(raw)).toFixed(1);
-    document.querySelectorAll('[data-folk-half]').forEach(function (el) {
+    document.querySelectorAll('[data-disc-row]').forEach(function (row) {
+      var check = row.querySelector('[data-disc-check]');
+      if (!check || !check.checked) return;
+      var el = row.querySelector('[data-folk-half]');
+      if (!el) return;
       if (!force && el.dataset.auto === '0' && el.value !== '') {
         return;
       }
@@ -192,9 +247,21 @@ $listHref = $base . '/judge/weigh-in?filter=' . urlencode($filter)
     });
   }
 
-  input.addEventListener('input', function () {
-    updateFolk(false);
-  });
-  input.focus();
+  if (input) {
+    input.addEventListener('input', function () {
+      updateFolk(false);
+    });
+    input.focus();
+  }
+
+  if (form) {
+    form.addEventListener('submit', function (e) {
+      var any = form.querySelector('[data-disc-check]:checked');
+      if (!any) {
+        e.preventDefault();
+        alert('Выберите хотя бы одну дисциплину');
+      }
+    });
+  }
 })();
 </script>
