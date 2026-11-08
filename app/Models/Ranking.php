@@ -183,6 +183,130 @@ class Ranking
         return $out;
     }
 
+    /**
+     * Абсолютка дисциплины по возрастным группам.
+     * Силовые (кг): Wilks. Повторы/народный/арм: лучший результат.
+     *
+     * @return list<array{age_group:string,age_sort:int,metric:string,rows:list<array>}>
+     */
+    public static function absolute(int $disciplineId): array
+    {
+        $discipline = Discipline::find($disciplineId);
+        if (!$discipline) {
+            return [];
+        }
+
+        $scoring = (string) ($discipline['scoring_type'] ?? 'weight');
+        $isFolk = FolkBench::isFolk($discipline);
+        $useWilks = $scoring === 'weight' && !$isFolk;
+
+        $st = Database::pdo()->prepare(
+            'SELECT p.id, p.full_name, p.body_weight, p.gender, p.age_group, p.lot_number,
+                    COALESCE(r.weight_category, p.weight_category) AS weight_category,
+                    best.best_result
+             FROM participants p
+             JOIN registrations r
+               ON r.participant_id = p.id AND r.discipline_id = ?
+             JOIN (
+               SELECT participant_id, MAX(value) AS best_result
+               FROM attempts
+               WHERE discipline_id = ? AND is_valid = 1 AND value IS NOT NULL
+               GROUP BY participant_id
+             ) best ON best.participant_id = p.id
+             WHERE p.status = ?'
+        );
+        $st->execute([$disciplineId, $disciplineId, Participant::STATUS_APPROVED]);
+        $all = $st->fetchAll();
+
+        $byAge = [];
+        foreach ($all as $row) {
+            $bw = (float) ($row['body_weight'] ?? 0);
+            $best = (float) ($row['best_result'] ?? 0);
+            if ($best <= 0) {
+                continue;
+            }
+
+            $ageLabel = PowerProtocol::ageGroupLabel($row['age_group'] ?? null);
+            $ageSort = PowerProtocol::ageGroupSortKey($row['age_group'] ?? null);
+            $cat = trim((string) ($row['weight_category'] ?? ''));
+            if ($cat === '') {
+                $cat = WeightCategory::forDiscipline(
+                    $discipline,
+                    (string) ($row['age_group'] ?? 'open'),
+                    $bw
+                );
+            }
+            $catShort = PowerProtocol::formatCategoryShort($cat);
+
+            $wilks = null;
+            if ($useWilks && $bw > 0) {
+                $wilks = PowerProtocol::wilks($bw, $best, (string) ($row['gender'] ?? 'M'));
+            }
+            $score = $useWilks ? (float) ($wilks ?? 0) : $best;
+            if ($useWilks && $score <= 0) {
+                continue;
+            }
+
+            $byAge[$ageLabel]['age_group'] = $ageLabel;
+            $byAge[$ageLabel]['age_sort'] = $ageSort;
+            $byAge[$ageLabel]['rows'][] = [
+                'id'             => (int) $row['id'],
+                'full_name'      => (string) $row['full_name'],
+                'body_weight'    => $bw,
+                'gender'         => $row['gender'] ?? 'M',
+                'age_group'      => $ageLabel,
+                'lot_number'     => $row['lot_number'] !== null ? (int) $row['lot_number'] : null,
+                'weight_category'=> $cat,
+                'category_short' => $catShort,
+                'best_result'    => $best,
+                'wilks'          => $wilks,
+                'score'          => $score,
+                'scoring_type'   => $scoring,
+            ];
+        }
+
+        $out = [];
+        foreach ($byAge as $block) {
+            usort($block['rows'], static function (array $a, array $b): int {
+                if ($a['score'] !== $b['score']) {
+                    return $b['score'] <=> $a['score'];
+                }
+                if ($a['body_weight'] !== $b['body_weight']) {
+                    return $a['body_weight'] <=> $b['body_weight'];
+                }
+                return strcmp((string) $a['full_name'], (string) $b['full_name']);
+            });
+
+            $place = 0;
+            $rank = 0;
+            $prevScore = null;
+            $prevBw = null;
+            foreach ($block['rows'] as &$row) {
+                $rank++;
+                $same = $prevScore !== null
+                    && (float) $row['score'] === (float) $prevScore
+                    && (float) $row['body_weight'] === (float) $prevBw;
+                if (!$same) {
+                    $place = $rank;
+                }
+                $row['place'] = $place;
+                $row['abs_place'] = $place;
+                $prevScore = $row['score'];
+                $prevBw = $row['body_weight'];
+            }
+            unset($row);
+
+            $block['metric'] = $useWilks ? 'wilks' : 'result';
+            $out[] = $block;
+        }
+
+        usort($out, static fn(array $a, array $b): int =>
+            ((int) ($a['age_sort'] ?? 1)) <=> ((int) ($b['age_sort'] ?? 1))
+        );
+
+        return $out;
+    }
+
     /** Подсказка: место решено по собственному весу */
     private static function tieNote(array $rows, int $index): ?string
     {

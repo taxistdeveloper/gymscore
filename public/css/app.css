@@ -4765,7 +4765,73 @@ html[data-theme="dark"] .proto-row.is-next td {
   font-weight: 800;
 }
 .proto-col-place { width: 2.3rem; font-weight: 800; }
+.proto-col-abs { width: 2.4rem; font-weight: 800; color: var(--muted); }
 .proto-col-wilks { width: 3.5rem; color: var(--muted); font-weight: 650; }
+
+.proto-abs {
+  margin: 1rem 0 1.25rem;
+  padding: 0.85rem 1rem 1rem;
+}
+.proto-abs-head {
+  margin-bottom: 0.75rem;
+}
+.proto-abs-title {
+  margin: 0;
+  font-family: var(--home-display, "Bebas Neue", "Arial Narrow", Impact, sans-serif);
+  font-size: 1.45rem;
+  letter-spacing: 0.04em;
+  font-weight: 400;
+}
+.proto-abs-sub {
+  margin: 0.2rem 0 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+.proto-abs-block + .proto-abs-block {
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--line);
+}
+.proto-abs-age {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0 0 0.55rem;
+  font-size: 0.95rem;
+}
+.proto-abs-count {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--muted);
+}
+.proto-abs-scroll {
+  overflow-x: auto;
+}
+.proto-abs-table th,
+.proto-abs-table td {
+  white-space: nowrap;
+}
+.proto-abs-col-place {
+  width: 2.5rem;
+  text-align: center;
+}
+.proto-abs-prize-1 { box-shadow: inset 3px 0 0 var(--signal); }
+.proto-abs-prize-2 { box-shadow: inset 3px 0 0 var(--ink); }
+.proto-abs-prize-3 { box-shadow: inset 3px 0 0 color-mix(in srgb, var(--ink) 28%, transparent); }
+
+.results-abs-hint {
+  margin: 0.25rem 0 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+.results-abs-block + .results-abs-block {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+}
+.results-abs-age {
+  margin: 0 0 0.65rem;
+}
 
 .proto-name {
   display: flex;

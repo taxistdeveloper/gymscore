@@ -17,11 +17,15 @@ class ResultsController extends Controller
         $protocol = $discipline
             ? Ranking::protocolByCategory((int) $discipline['id'])
             : [];
+        $absolute = $discipline
+            ? Ranking::absolute((int) $discipline['id'])
+            : [];
 
         $this->view('results/index', [
             'disciplines' => $disciplines,
             'discipline'  => $discipline,
             'protocol'    => $protocol,
+            'absolute'    => $absolute,
             'flash'       => $this->takeFlash(),
         ]);
     }
@@ -44,6 +48,7 @@ class ResultsController extends Controller
             $sections[] = [
                 'discipline' => $d,
                 'protocol'   => Ranking::protocolByCategory((int) $d['id']),
+                'absolute'   => Ranking::absolute((int) $d['id']),
             ];
         }
 

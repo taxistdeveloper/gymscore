@@ -397,8 +397,10 @@ function print_gender(string $g): string {
         <?php
           $d = $section['discipline'];
           $protocol = $section['protocol'];
+          $absolute = $section['absolute'] ?? [];
           $scoring = $d['scoring_type'] ?? 'weight';
           $isFolk = ($d['code'] ?? '') === \App\Models\FolkBench::CODE;
+          $useWilks = $scoring === 'weight' && !$isFolk;
           $unit = print_unit($scoring, $isFolk);
           $resultLabel = print_result_label($scoring, $isFolk);
         ?>
@@ -407,7 +409,60 @@ function print_gender(string $g): string {
             <div class="disc-head">Дисциплина: <?= htmlspecialchars($d['name_ru'] ?? '') ?></div>
           <?php endif; ?>
 
-          <?php if (empty($protocol)): ?>
+          <?php if (!empty($absolute)): ?>
+            <?php foreach ($absolute as $absBlock): ?>
+              <?php
+                $absRows = $absBlock['rows'] ?? [];
+                if ($absRows === []) {
+                    continue;
+                }
+                $ageLabel = (string) ($absBlock['age_group'] ?? '');
+              ?>
+              <div class="cat">
+                <div class="cat-head">
+                  Абсолютка<?= $ageLabel !== '' ? ': ' . htmlspecialchars($ageLabel) : '' ?>
+                  <span>(<?= $useWilks ? 'по коэффициенту Wilks' : 'по результату' ?>)</span>
+                </div>
+                <table class="protocol">
+                  <thead>
+                    <tr>
+                      <th class="c-n">№</th>
+                      <th class="c-place">Место</th>
+                      <th class="c-name">Фамилия, имя, отчество</th>
+                      <th class="c-num">ВК</th>
+                      <th class="c-num"><?= htmlspecialchars($resultLabel) ?></th>
+                      <?php if ($useWilks): ?>
+                        <th class="c-num">Коэф</th>
+                      <?php endif; ?>
+                      <th class="c-num">Собств. вес, кг</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <?php foreach ($absRows as $ri => $row): ?>
+                      <tr>
+                        <td class="c-n"><?= $ri + 1 ?></td>
+                        <td class="c-place"><?= (int) ($row['place'] ?? $row['abs_place'] ?? 0) ?></td>
+                        <td class="c-name"><?= htmlspecialchars($row['full_name']) ?></td>
+                        <td class="c-num"><?= htmlspecialchars((string) ($row['category_short'] ?? '—')) ?></td>
+                        <td class="c-num">
+                          <?= htmlspecialchars(print_fmt_result((float) $row['best_result'], $scoring)) ?>
+                          <?= htmlspecialchars($unit) ?>
+                        </td>
+                        <?php if ($useWilks): ?>
+                          <td class="c-num">
+                            <?= $row['wilks'] !== null ? number_format((float) $row['wilks'], 3, ',', '') : '—' ?>
+                          </td>
+                        <?php endif; ?>
+                        <td class="c-num"><?= number_format((float) $row['body_weight'], 2, '.', '') ?></td>
+                      </tr>
+                    <?php endforeach; ?>
+                  </tbody>
+                </table>
+              </div>
+            <?php endforeach; ?>
+          <?php endif; ?>
+
+          <?php if (empty($protocol) && empty($absolute)): ?>
             <p class="empty">Зачётные результаты отсутствуют.</p>
           <?php else: ?>
             <?php foreach ($protocol as $group): ?>
@@ -458,6 +513,7 @@ function print_gender(string $g): string {
         <ol>
           <li>В зачёт принимается лучший действительный результат участника.</li>
           <li>При равенстве результатов преимущество получает участник с меньшим собственным весом.</li>
+          <li>Абсолютка: силовые дисциплины — по коэффициенту Wilks; народный жим и повторы — по лучшему результату. Отдельно для Юниоров и Открытой.</li>
           <li>Протокол составлен по итогам официальных попыток на помосте.</li>
         </ol>
       </div>

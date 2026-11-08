@@ -521,11 +521,122 @@ class PowerProtocol
             return $a['sort_key'] <=> $b['sort_key'];
         });
 
+        $categories = array_values($grouped);
+        $absolute = self::buildAbsoluteFromCategories($categories, !$isReps);
+
+        // Проставить место в абсолютке в строки протокола
+        $absPlaceById = [];
+        foreach ($absolute as $block) {
+            foreach ($block['rows'] as $row) {
+                $absPlaceById[(int) $row['id']] = $row['abs_place'];
+            }
+        }
+        foreach ($categories as &$catGroup) {
+            foreach ($catGroup['athletes'] as &$ath) {
+                $ath['abs_place'] = $absPlaceById[(int) $ath['id']] ?? '—';
+            }
+            unset($ath);
+        }
+        unset($catGroup);
+
         return [
-            'categories'      => array_values($grouped),
+            'categories'      => $categories,
+            'absolute'        => $absolute,
             'total_athletes'  => count($participants),
             'judged_attempts' => $totalJudged,
         ];
+    }
+
+    /**
+     * Абсолютка по возрастным группам.
+     * Силовые (кг): по Wilks. Повторы/народный: по лучшему результату.
+     * Тай-брейк: меньше собственный вес.
+     *
+     * @param list<array> $categories
+     * @return list<array{age_group:string,age_sort:int,metric:string,rows:list<array>}>
+     */
+    public static function buildAbsoluteFromCategories(array $categories, bool $useWilks): array
+    {
+        $byAge = [];
+        foreach ($categories as $catGroup) {
+            $ageLabel = (string) ($catGroup['age_group'] ?? 'Открытая');
+            $ageSort = (int) ($catGroup['age_sort'] ?? self::ageGroupSortKey($ageLabel));
+            foreach ($catGroup['athletes'] as $ath) {
+                if (empty($ath['has_lift']) || $ath['best'] === null || (float) $ath['best'] <= 0) {
+                    continue;
+                }
+                $score = $useWilks
+                    ? (float) ($ath['wilks'] ?? 0)
+                    : (float) $ath['best'];
+                if ($useWilks && $score <= 0) {
+                    continue;
+                }
+                $byAge[$ageLabel]['age_group'] = $ageLabel;
+                $byAge[$ageLabel]['age_sort'] = $ageSort;
+                $byAge[$ageLabel]['rows'][] = [
+                    'id'              => (int) $ath['id'],
+                    'full_name'       => (string) $ath['full_name'],
+                    'team'            => (string) ($ath['team'] ?? '—'),
+                    'age_group'       => $ageLabel,
+                    'category_short'  => (string) ($ath['category_short'] ?? '—'),
+                    'category_full'   => (string) ($ath['category_full'] ?? ''),
+                    'body_weight'     => $ath['body_weight'],
+                    'body_weight_fmt' => (string) ($ath['body_weight_fmt'] ?? '—'),
+                    'best'            => $ath['best'],
+                    'best_fmt'        => (string) ($ath['best_fmt'] ?? '—'),
+                    'wilks'           => $ath['wilks'] ?? null,
+                    'wilks_fmt'       => (string) ($ath['wilks_fmt'] ?? '—'),
+                    'score'           => $score,
+                    'score_fmt'       => $useWilks
+                        ? number_format($score, 3, ',', '')
+                        : (string) ($ath['best_fmt'] ?? '—'),
+                    'cat_place'       => $ath['place'] ?? '—',
+                    'abs_place'       => null,
+                ];
+            }
+        }
+
+        $out = [];
+        foreach ($byAge as $block) {
+            usort($block['rows'], static function (array $a, array $b): int {
+                if ($a['score'] !== $b['score']) {
+                    return $b['score'] <=> $a['score'];
+                }
+                $bwa = $a['body_weight'] !== null ? (float) $a['body_weight'] : 9999.0;
+                $bwb = $b['body_weight'] !== null ? (float) $b['body_weight'] : 9999.0;
+                if ($bwa !== $bwb) {
+                    return $bwa <=> $bwb;
+                }
+                return strcmp($a['full_name'], $b['full_name']);
+            });
+
+            $place = 0;
+            $rank = 0;
+            $prevScore = null;
+            $prevBw = null;
+            foreach ($block['rows'] as &$row) {
+                $rank++;
+                $same = $prevScore !== null
+                    && (float) $row['score'] === (float) $prevScore
+                    && (float) ($row['body_weight'] ?? -1) === (float) $prevBw;
+                if (!$same) {
+                    $place = $rank;
+                }
+                $row['abs_place'] = $place;
+                $prevScore = $row['score'];
+                $prevBw = $row['body_weight'];
+            }
+            unset($row);
+
+            $block['metric'] = $useWilks ? 'wilks' : 'result';
+            $out[] = $block;
+        }
+
+        usort($out, static fn(array $a, array $b): int =>
+            ((int) ($a['age_sort'] ?? 1)) <=> ((int) ($b['age_sort'] ?? 1))
+        );
+
+        return $out;
     }
 }
 

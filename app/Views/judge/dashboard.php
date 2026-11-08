@@ -44,7 +44,8 @@ $attemptPrefix = match (true) {
     default => 'П',
 };
 
-$colSpan = $isFolk ? 10 : 16;
+$colSpan = $isFolk ? 11 : 17;
+$absolute = $protocolData['absolute'] ?? [];
 
 $judgeNav = 'protocol';
 $judgeDid = $did;
@@ -153,7 +154,8 @@ $judgedAttempts = $protocolData['judged_attempts'] ?? 0;
             <?php if ($isFolk): ?>
               <th class="proto-col-bar" title="Вес на штанге = ½ собственного веса">Штанга</th>
               <th class="proto-col-att" title="Число повторений"><?= htmlspecialchars($bestColTitle) ?></th>
-              <th class="proto-col-place">М</th>
+              <th class="proto-col-place" title="Место в весовой">М</th>
+              <th class="proto-col-abs" title="Место в абсолютке">Абс</th>
             <?php else: ?>
               <th class="proto-col-att"><?= htmlspecialchars($attemptPrefix) ?>1</th>
               <th class="proto-col-att"><?= htmlspecialchars($attemptPrefix) ?>2</th>
@@ -161,7 +163,8 @@ $judgedAttempts = $protocolData['judged_attempts'] ?? 0;
               <th class="proto-col-att" title="Рекордная попытка"><?= htmlspecialchars($attemptPrefix) ?>R</th>
               <th class="proto-col-best"><?= htmlspecialchars($bestColTitle) ?></th>
               <th class="proto-col-sum">Σ</th>
-              <th class="proto-col-place">М</th>
+              <th class="proto-col-place" title="Место в весовой">М</th>
+              <th class="proto-col-abs" title="Место в абсолютке">Абс</th>
               <th class="proto-col-wilks">Коэф</th>
             <?php endif; ?>
           </tr>
@@ -346,6 +349,19 @@ $judgedAttempts = $protocolData['judged_attempts'] ?? 0;
                       <?= htmlspecialchars((string) $ath['place']) ?>
                     <?php endif; ?>
                   </td>
+                  <td class="proto-cell proto-col-abs" data-abs-for="<?= $pid ?>">
+                    <?php
+                      $absPl = $ath['abs_place'] ?? '—';
+                      if ((int) $absPl === 1): ?>
+                      <span class="proto-place is-1">1</span>
+                    <?php elseif ((int) $absPl === 2): ?>
+                      <span class="proto-place is-2">2</span>
+                    <?php elseif ((int) $absPl === 3): ?>
+                      <span class="proto-place is-3">3</span>
+                    <?php else: ?>
+                      <?= htmlspecialchars((string) $absPl) ?>
+                    <?php endif; ?>
+                  </td>
                 <?php else: ?>
                   <?php for ($attNo = 1; $attNo <= 4; $attNo++): ?>
                     <?php
@@ -400,6 +416,19 @@ $judgedAttempts = $protocolData['judged_attempts'] ?? 0;
                       <?= htmlspecialchars((string) $ath['place']) ?>
                     <?php endif; ?>
                   </td>
+                  <td class="proto-cell proto-col-abs" data-abs-for="<?= $pid ?>">
+                    <?php
+                      $absPl = $ath['abs_place'] ?? '—';
+                      if ((int) $absPl === 1): ?>
+                      <span class="proto-place is-1">1</span>
+                    <?php elseif ((int) $absPl === 2): ?>
+                      <span class="proto-place is-2">2</span>
+                    <?php elseif ((int) $absPl === 3): ?>
+                      <span class="proto-place is-3">3</span>
+                    <?php else: ?>
+                      <?= htmlspecialchars((string) $absPl) ?>
+                    <?php endif; ?>
+                  </td>
                   <td class="proto-cell proto-col-wilks" data-wilks-for="<?= $pid ?>">
                     <?= htmlspecialchars($ath['wilks_fmt']) ?>
                   </td>
@@ -410,6 +439,8 @@ $judgedAttempts = $protocolData['judged_attempts'] ?? 0;
         </tbody>
       </table>
     </div>
+
+    <?php require __DIR__ . '/../partials/protocol_absolute.php'; ?>
 
     <?php if (!$isFolk): ?>
     <div class="proto-refs">
