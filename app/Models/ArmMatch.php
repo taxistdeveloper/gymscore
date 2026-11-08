@@ -17,7 +17,10 @@ class ArmMatch
         return $row ?: null;
     }
 
-    /** Взвешенные участники армрестлинга, сгруппированные по весовой категории. */
+    /**
+     * Взвешенные участники армрестлинга, сгруппированные по возрасту + весовой.
+     * Ключ группы: «Юниоры · до 75 кг» / «Открытая · до 80 кг».
+     */
     public static function eligibleByCategory(int $disciplineId): array
     {
         $st = Database::pdo()->prepare(
@@ -26,7 +29,9 @@ class ArmMatch
              FROM participants p
              JOIN registrations r ON r.participant_id = p.id AND r.discipline_id = ?
              WHERE p.status = ? AND p.weighed_at IS NOT NULL
-             ORDER BY COALESCE(r.weight_category, p.weight_category), p.lot_number IS NULL, p.lot_number, p.full_name'
+             ORDER BY FIELD(IFNULL(p.age_group, ""), "juniors", "open"),
+                      COALESCE(r.weight_category, p.weight_category),
+                      p.lot_number IS NULL, p.lot_number, p.full_name'
         );
         $st->execute([$disciplineId, Participant::STATUS_APPROVED]);
 
@@ -40,8 +45,13 @@ class ArmMatch
                     (float) $row['body_weight']
                 );
             }
-            $row['weight_category'] = $cat;
-            $groups[$cat][] = $row;
+            $ageLabel = PowerProtocol::ageGroupLabel($row['age_group'] ?? null);
+            // Composite key so juniors/open with same weight label stay separate
+            $groupKey = $ageLabel . ' · ' . $cat;
+            $row['weight_category'] = $groupKey;
+            $row['weight_category_raw'] = $cat;
+            $row['age_group_label'] = $ageLabel;
+            $groups[$groupKey][] = $row;
         }
         return $groups;
     }
@@ -150,9 +160,22 @@ class ArmMatch
         $matches = self::allForDiscipline($disciplineId);
         $wins = self::winCounts($disciplineId);
 
+        // participant_id → актуальный ключ группы (Юниоры · ВК)
+        $pidToGroup = [];
+        foreach ($eligible as $cat => $people) {
+            foreach ($people as $p) {
+                $pidToGroup[(int) $p['id']] = $cat;
+            }
+        }
+
         $byCategory = [];
         foreach ($matches as $m) {
-            $cat = $m['weight_category'];
+            $p1 = (int) ($m['participant1_id'] ?? 0);
+            // Старые матчи могли хранить только ВК без возраста — привязываем по атлету
+            $cat = $pidToGroup[$p1] ?? (string) ($m['weight_category'] ?? '');
+            if ($cat === '') {
+                continue;
+            }
             $round = (int) $m['round_no'];
             $byCategory[$cat]['rounds'][$round][] = $m;
             $byCategory[$cat]['max_round'] = max(
@@ -166,9 +189,26 @@ class ArmMatch
                 $byCategory[$cat] = ['rounds' => [], 'max_round' => 0];
             }
             $byCategory[$cat]['people'] = $people;
+            $first = $people[0] ?? [];
+            $byCategory[$cat]['age_sort'] = PowerProtocol::ageGroupSortKey($first['age_group'] ?? null);
+            $byCategory[$cat]['sort_key'] = PowerProtocol::categorySortKey(
+                (string) ($first['weight_category_raw'] ?? $cat)
+            );
         }
 
-        ksort($byCategory);
+        uksort($byCategory, static function (string $ka, string $kb) use ($byCategory): int {
+            $a = $byCategory[$ka];
+            $b = $byCategory[$kb];
+            $age = ((int) ($a['age_sort'] ?? 1)) <=> ((int) ($b['age_sort'] ?? 1));
+            if ($age !== 0) {
+                return $age;
+            }
+            $w = ((float) ($a['sort_key'] ?? 0)) <=> ((float) ($b['sort_key'] ?? 0));
+            if ($w !== 0) {
+                return $w;
+            }
+            return strcmp($ka, $kb);
+        });
 
         return [
             'byCategory' => $byCategory,
@@ -235,7 +275,12 @@ class ArmMatch
 
         $grouped = [];
         foreach ($eligible as $cat => $people) {
-            $catShort = PowerProtocol::formatCategoryShort($cat);
+            $first = $people[0] ?? [];
+            $ageLabel = (string) ($first['age_group_label'] ?? PowerProtocol::ageGroupLabel($first['age_group'] ?? null));
+            $rawCat = (string) ($first['weight_category_raw'] ?? $cat);
+            $catShort = PowerProtocol::formatCategoryShort($rawCat);
+            $groupKey = $ageLabel . '|' . $catShort;
+            $groupLabel = $ageLabel . ' · ' . $catShort;
             $athletes = [];
             foreach ($people as $p) {
                 $pid = (int) $p['id'];
@@ -248,10 +293,12 @@ class ArmMatch
                     'full_name'       => (string) ($p['full_name'] ?? '—'),
                     'team'            => !empty($p['team']) ? (string) $p['team'] : (!empty($p['club']) ? (string) $p['club'] : '—'),
                     'birth_year'      => !empty($p['birth_year']) ? (int) $p['birth_year'] : '—',
+                    'age_group'       => $ageLabel,
                     'body_weight'     => $bw,
                     'body_weight_fmt' => $bw !== null ? number_format($bw, 2, ',', '') : '—',
                     'category_short'  => $catShort,
-                    'category_full'   => $cat,
+                    'category_full'   => $rawCat,
+                    'group_key'       => $groupKey,
                     'wins'            => $w,
                     'losses'          => $l,
                     'played'          => (int) ($played[$pid] ?? 0),
@@ -304,14 +351,24 @@ class ArmMatch
             unset($ath);
 
             $grouped[] = [
-                'category'       => $cat,
+                'category'       => $rawCat,
                 'category_short' => $catShort,
-                'sort_key'       => PowerProtocol::categorySortKey($cat),
+                'age_group'      => $ageLabel,
+                'age_sort'       => PowerProtocol::ageGroupSortKey($first['age_group'] ?? null),
+                'group_key'      => $groupKey,
+                'group_label'    => $groupLabel,
+                'sort_key'       => PowerProtocol::categorySortKey($rawCat),
                 'athletes'       => $athletes,
             ];
         }
 
-        usort($grouped, static fn(array $a, array $b): int => $a['sort_key'] <=> $b['sort_key']);
+        usort($grouped, static function (array $a, array $b): int {
+            $age = ((int) ($a['age_sort'] ?? 1)) <=> ((int) ($b['age_sort'] ?? 1));
+            if ($age !== 0) {
+                return $age;
+            }
+            return $a['sort_key'] <=> $b['sort_key'];
+        });
 
         $done = 0;
         foreach ($matches as $m) {
@@ -353,6 +410,38 @@ class ArmMatch
     }
 
     /**
+     * Переписать устаревшие weight_category матчей на ключ «Возраст · ВК».
+     */
+    private static function normalizeMatchCategoryKeys(int $disciplineId, string $category): void
+    {
+        $eligible = self::eligibleByCategory($disciplineId);
+        $people = $eligible[$category] ?? [];
+        if ($people === []) {
+            return;
+        }
+
+        $raw = (string) ($people[0]['weight_category_raw'] ?? '');
+        if ($raw === '' || $raw === $category) {
+            return;
+        }
+
+        $ids = array_map(static fn(array $p): int => (int) $p['id'], $people);
+        if ($ids === []) {
+            return;
+        }
+
+        $placeholders = implode(',', array_fill(0, count($ids), '?'));
+        $params = array_merge([$category, $disciplineId, $raw], $ids);
+        Database::pdo()->prepare(
+            "UPDATE arm_matches
+             SET weight_category = ?
+             WHERE discipline_id = ?
+               AND weight_category = ?
+               AND participant1_id IN ($placeholders)"
+        )->execute($params);
+    }
+
+    /**
      * Составить пары в категории.
      * Если последний раунд завершён — следующий из победителей.
      * Если нет матчей — 1-й раунд из взвешенных.
@@ -368,6 +457,9 @@ class ArmMatch
         }
 
         $pdo = Database::pdo();
+
+        // Миграция старых ключей «до 75 кг» → «Юниоры · до 75 кг» для участников этой группы
+        self::normalizeMatchCategoryKeys($disciplineId, $category);
 
         $stMax = $pdo->prepare(
             'SELECT COALESCE(MAX(round_no), 0) FROM arm_matches

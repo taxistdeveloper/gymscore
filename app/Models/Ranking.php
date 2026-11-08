@@ -110,12 +110,19 @@ class Ranking
                     (float) $row['body_weight']
                 );
             }
-            $key = ($row['gender'] ?? 'M') . '|' . $cat;
+            $ageLabel = PowerProtocol::ageGroupLabel($row['age_group'] ?? null);
+            $ageSort = PowerProtocol::ageGroupSortKey($row['age_group'] ?? null);
+            $catShort = PowerProtocol::formatCategoryShort($cat);
+            $key = ($row['gender'] ?? 'M') . '|' . $ageLabel . '|' . $cat;
             if (!isset($groups[$key])) {
                 $groups[$key] = [
-                    'category' => $cat,
-                    'gender'   => $row['gender'] ?? 'M',
-                    'rows'     => [],
+                    'category'     => $ageLabel . ' · ' . $cat,
+                    'category_raw' => $cat,
+                    'category_short' => $catShort,
+                    'age_group'    => $ageLabel,
+                    'age_sort'     => $ageSort,
+                    'gender'       => $row['gender'] ?? 'M',
+                    'rows'         => [],
                 ];
             }
             $groups[$key]['rows'][] = $row;
@@ -165,7 +172,12 @@ class Ranking
             if ($a['gender'] !== $b['gender']) {
                 return $a['gender'] === 'M' ? -1 : 1;
             }
-            return strcmp($a['category'], $b['category']);
+            $age = ((int) ($a['age_sort'] ?? 1)) <=> ((int) ($b['age_sort'] ?? 1));
+            if ($age !== 0) {
+                return $age;
+            }
+            return PowerProtocol::categorySortKey($a['category_raw'] ?? $a['category'])
+                <=> PowerProtocol::categorySortKey($b['category_raw'] ?? $b['category']);
         });
 
         return $out;

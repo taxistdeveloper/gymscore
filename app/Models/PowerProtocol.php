@@ -174,7 +174,29 @@ class PowerProtocol
     }
 
     /**
-     * Builds structured protocol data grouped by weight category.
+     * Normalize age group to protocol label: Юниоры | Открытая.
+     */
+    public static function ageGroupLabel(?string $ageGroup): string
+    {
+        $raw = mb_strtolower(trim((string) $ageGroup));
+        if ($raw === 'juniors' || str_contains($raw, 'юниор') || str_contains($raw, 'юнош')) {
+            return 'Юниоры';
+        }
+
+        return 'Открытая';
+    }
+
+    /**
+     * Sort order for age groups (Juniors first, then Open).
+     */
+    public static function ageGroupSortKey(?string $ageGroup): int
+    {
+        return self::ageGroupLabel($ageGroup) === 'Юниоры' ? 0 : 1;
+    }
+
+    /**
+     * Builds structured protocol data grouped by age group + weight category.
+     * Juniors and Open are separate even when weight class labels match.
      *
      * @param array $discipline
      * @param list<array> $participants
@@ -183,8 +205,12 @@ class PowerProtocol
      * @param array|null $current Current athlete on platform
      * @return array{
      *   categories: list<array{
+     *     age_group: string,
+     *     age_sort: int,
      *     category: string,
      *     category_short: string,
+     *     group_key: string,
+     *     group_label: string,
      *     sort_key: float,
      *     athletes: list<array>
      *   }>,
@@ -377,14 +403,17 @@ class PowerProtocol
                 }
             }
 
+            $ageLabel = self::ageGroupLabel($p['age_group'] ?? null);
+            $ageSort = self::ageGroupSortKey($p['age_group'] ?? null);
+            $groupKey = $ageLabel . '|' . $catShort;
+            $groupLabel = $ageLabel . ' · ' . $catShort;
+
             $athleteRow = [
                 'id'              => $pid,
                 'lot_number'      => !empty($p['lot_number']) ? (int) $p['lot_number'] : $pid,
                 'full_name'       => (string) ($p['full_name'] ?? '—'),
                 'discipline_abbr' => !empty($discipline['name_ru']) ? (string) $discipline['name_ru'] : '—',
-                'age_group'       => ($p['age_group'] === 'juniors' || str_contains(mb_strtolower((string)$p['age_group']), 'юниор'))
-                    ? 'Юниоры'
-                    : 'Открытая',
+                'age_group'       => $ageLabel,
                 'team'            => !empty($p['team']) ? (string) $p['team'] : (!empty($p['club']) ? (string) $p['club'] : 'Личник'),
                 'birth_year'      => !empty($p['birth_year']) ? (int) $p['birth_year'] : '—',
                 'sport_rank'      => $rank ?: (!empty($p['rank']) ? (string) $p['rank'] : '—'),
@@ -394,6 +423,7 @@ class PowerProtocol
                 'bar_weight_fmt'  => $barWeight !== null ? number_format($barWeight, 1, ',', '') : '—',
                 'category_short'  => $catShort,
                 'category_full'   => $cat,
+                'group_key'       => $groupKey,
                 'weighed'         => !empty($p['weighed_at']),
                 'attempts'        => $attemptsData,
                 'best'            => $bestVal,
@@ -418,10 +448,14 @@ class PowerProtocol
                 'is_next_up'      => ($qInfo['status'] ?? '') === 'next',
             ];
 
-            $grouped[$catShort]['category'] = $cat;
-            $grouped[$catShort]['category_short'] = $catShort;
-            $grouped[$catShort]['sort_key'] = $catKey;
-            $grouped[$catShort]['athletes'][] = $athleteRow;
+            $grouped[$groupKey]['age_group'] = $ageLabel;
+            $grouped[$groupKey]['age_sort'] = $ageSort;
+            $grouped[$groupKey]['category'] = $cat;
+            $grouped[$groupKey]['category_short'] = $catShort;
+            $grouped[$groupKey]['group_key'] = $groupKey;
+            $grouped[$groupKey]['group_label'] = $groupLabel;
+            $grouped[$groupKey]['sort_key'] = $catKey;
+            $grouped[$groupKey]['athletes'][] = $athleteRow;
         }
 
         // Calculate places within each category
@@ -478,8 +512,14 @@ class PowerProtocol
         }
         unset($group);
 
-        // Sort categories by athletic weight progression (60, 67.5, 75, 82.5, 90, 100, 110, 125, 140+)
-        uasort($grouped, static fn (array $a, array $b): int => $a['sort_key'] <=> $b['sort_key']);
+        // Juniors first, then Open; within age — by weight class
+        uasort($grouped, static function (array $a, array $b): int {
+            $age = ((int) ($a['age_sort'] ?? 1)) <=> ((int) ($b['age_sort'] ?? 1));
+            if ($age !== 0) {
+                return $age;
+            }
+            return $a['sort_key'] <=> $b['sort_key'];
+        });
 
         return [
             'categories'      => array_values($grouped),

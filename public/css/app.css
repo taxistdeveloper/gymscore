@@ -4588,6 +4588,28 @@ a.apps-row-name:hover {
   margin-right: 0.45rem;
 }
 
+.proto-age-label {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-right: 0.55rem;
+  padding: 0.15rem 0.45rem;
+  border-radius: 0.25rem;
+  vertical-align: middle;
+}
+
+.proto-age-label--jr {
+  color: color-mix(in srgb, var(--signal, #c45c26) 90%, var(--ink));
+  background: color-mix(in srgb, var(--signal, #c45c26) 14%, transparent);
+}
+
+.proto-age-label--open {
+  color: color-mix(in srgb, var(--ink) 75%, var(--muted));
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+}
+
 .proto-cat-count {
   font-size: 0.72rem;
   font-weight: 700;

@@ -41,10 +41,15 @@ $doneMatches = (int) ($armProtocol['done_matches'] ?? 0);
         <?php foreach ($categories as $catIdx => $catGroup): ?>
           <?php
             $catShort = $catGroup['category_short'];
+            $groupKey = (string) ($catGroup['group_key'] ?? $catShort);
+            $ageLabel = (string) ($catGroup['age_group'] ?? '');
             $athletesCount = count($catGroup['athletes']);
           ?>
-          <tr class="proto-cat-row" data-cat-header="<?= htmlspecialchars($catShort) ?>">
+          <tr class="proto-cat-row" data-cat-header="<?= htmlspecialchars($groupKey) ?>">
             <td colspan="7">
+              <?php if ($ageLabel !== ''): ?>
+                <span class="proto-age-label<?= $ageLabel === 'Юниоры' ? ' proto-age-label--jr' : ' proto-age-label--open' ?>"><?= htmlspecialchars($ageLabel) ?></span>
+              <?php endif; ?>
               <span class="proto-cat-label"><?= htmlspecialchars($catShort) ?></span>
               <span class="proto-cat-count"><?= $athletesCount ?></span>
             </td>
@@ -55,11 +60,14 @@ $doneMatches = (int) ($armProtocol['done_matches'] ?? 0);
               if ($athIdx % 2 === 1) $rowClasses[] = 'is-alt';
             ?>
             <tr class="<?= implode(' ', $rowClasses) ?>"
-                data-cat="<?= htmlspecialchars($catShort) ?>"
+                data-cat="<?= htmlspecialchars($groupKey) ?>"
                 data-name="<?= htmlspecialchars(mb_strtolower($ath['full_name'])) ?>">
               <td class="proto-cell proto-col-lot"><?= htmlspecialchars((string) $ath['lot_number']) ?></td>
               <td class="proto-cell proto-col-name text-left">
                 <strong class="proto-ath"><?= htmlspecialchars(mb_strtoupper($ath['full_name'])) ?></strong>
+                <?php if (!empty($ath['age_group'])): ?>
+                  <span class="proto-meta"><?= htmlspecialchars((string) $ath['age_group']) ?></span>
+                <?php endif; ?>
               </td>
               <td class="proto-cell proto-col-bw"><?= htmlspecialchars($ath['body_weight_fmt']) ?></td>
               <td class="proto-cell proto-col-cat"><strong><?= htmlspecialchars($catShort) ?></strong></td>

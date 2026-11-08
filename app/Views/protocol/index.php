@@ -80,12 +80,16 @@ $judgedAttempts = $protocolData['judged_attempts'] ?? 0;
 
     <?php if (!empty($categories)): ?>
       <div class="proto-filter">
-        <label class="sr-only" for="catFilter">Весовая категория</label>
+        <label class="sr-only" for="catFilter">Категория</label>
         <select class="field field-sm" id="catFilter">
-          <option value="all">Все ВК (<?= count($categories) ?>)</option>
+          <option value="all">Все (<?= count($categories) ?>)</option>
           <?php foreach ($categories as $cat): ?>
-            <option value="<?= htmlspecialchars($cat['category_short']) ?>">
-              <?= htmlspecialchars($cat['category_short']) ?> · <?= count($cat['athletes']) ?>
+            <?php
+              $filterKey = (string) ($cat['group_key'] ?? $cat['category_short']);
+              $filterLabel = (string) ($cat['group_label'] ?? $cat['category_short']);
+            ?>
+            <option value="<?= htmlspecialchars($filterKey) ?>">
+              <?= htmlspecialchars($filterLabel) ?> · <?= count($cat['athletes']) ?>
             </option>
           <?php endforeach; ?>
         </select>
@@ -159,10 +163,15 @@ $judgedAttempts = $protocolData['judged_attempts'] ?? 0;
           <?php foreach ($categories as $catIdx => $catGroup): ?>
             <?php
               $catShort = $catGroup['category_short'];
+              $groupKey = (string) ($catGroup['group_key'] ?? $catShort);
+              $ageLabel = (string) ($catGroup['age_group'] ?? '');
               $athletesCount = count($catGroup['athletes']);
             ?>
-            <tr class="proto-cat-row" data-cat-header="<?= htmlspecialchars($catShort) ?>">
+            <tr class="proto-cat-row" data-cat-header="<?= htmlspecialchars($groupKey) ?>">
               <td colspan="<?= (int) $colSpan ?>">
+                <?php if ($ageLabel !== ''): ?>
+                  <span class="proto-age-label<?= $ageLabel === 'Юниоры' ? ' proto-age-label--jr' : ' proto-age-label--open' ?>"><?= htmlspecialchars($ageLabel) ?></span>
+                <?php endif; ?>
                 <span class="proto-cat-label"><?= htmlspecialchars($catShort) ?></span>
                 <span class="proto-cat-count"><?= $athletesCount ?></span>
               </td>
@@ -179,7 +188,7 @@ $judgedAttempts = $protocolData['judged_attempts'] ?? 0;
                 if ($isNextUp) $rowClasses[] = 'is-next';
               ?>
               <tr class="<?= implode(' ', $rowClasses) ?>"
-                  data-cat="<?= htmlspecialchars($catShort) ?>"
+                  data-cat="<?= htmlspecialchars($groupKey) ?>"
                   data-name="<?= htmlspecialchars(mb_strtolower($ath['full_name'])) ?>"
                   data-pid="<?= $pid ?>"
                   data-queue-pos="<?= (int) ($ath['queue_pos'] ?? 9999) ?>"
