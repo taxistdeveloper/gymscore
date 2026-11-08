@@ -507,14 +507,38 @@ class JudgeController extends Controller
             $this->redirect($back);
         }
 
+        $prev = Attempt::find($participantId, $disciplineId, $attemptNo);
+        $hadDeclared = $prev
+            && $prev['declared_weight'] !== null
+            && $prev['declared_weight'] !== ''
+            && (float) $prev['declared_weight'] > 0
+            && ($prev['value'] === null || $prev['value'] === '');
+
+        // Нельзя менять вес уже зафиксированной попытки
+        if ($prev && $prev['value'] !== null && $prev['value'] !== '') {
+            $this->flash('danger', 'Попытка #' . $attemptNo . ' уже зафиксирована');
+            $this->redirect($back . (str_contains($back, 'protocol') ? '&open_stage=1' : ''));
+        }
+
         Attempt::declareWeight($participantId, $disciplineId, $attemptNo, (float) $rawWeight);
 
-        $this->flash(
-            'success',
-            'Заказан вес на попытку #' . $attemptNo . ': '
-            . number_format((float) $rawWeight, 1, '.', '') . ' кг'
-        );
-        $this->redirect($back . (str_contains($back, 'protocol') ? '&open_stage=1' : ''));
+        $weightLabel = number_format((float) $rawWeight, 1, '.', '') . ' кг';
+        $isLast = $attemptNo >= $max;
+        $isBiceps = in_array((string) ($discipline['code'] ?? ''), ['curl_strict', 'curl_extreme'], true);
+        $verb = ($hadDeclared && $isLast && $isBiceps) ? 'Перезаказан' : 'Заказан';
+
+        $this->flash('success', $verb . ' вес на попытку #' . $attemptNo . ': ' . $weightLabel);
+
+        $stageQs = str_contains($back, 'protocol') ? '&open_stage=1' : '';
+        // После перезаказа последнего подхода остаёмся на этом атлете
+        if ($hadDeclared && $isLast) {
+            $this->redirect(
+                $back
+                . '&current=' . urlencode($participantId . '-' . $attemptNo)
+                . $stageQs
+            );
+        }
+        $this->redirect($back . $stageQs);
     }
 
     public function arm(): void

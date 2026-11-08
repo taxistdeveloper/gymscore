@@ -43,8 +43,20 @@ $weightFmt = static function ($w) use ($scoring, $isFolk): string {
 $currentKey = $current
     ? ((int) $current['participant_id'] . '-' . (int) $current['attempt_no'])
     : '';
-$nextAttempt = $current ? ((int) $current['attempt_no'] + 1) : 2;
+$discCode = (string) ($discipline['code'] ?? '');
+$allowLastReorder = in_array($discCode, ['curl_strict', 'curl_extreme'], true);
+$currentAttemptNo = $current ? (int) $current['attempt_no'] : 0;
+$nextAttempt = $current ? ($currentAttemptNo + 1) : 2;
 $canOrderNext = $current && $nextAttempt <= $attemptsAllowed && $scoring === 'weight';
+// Строгий / экстремальный бицепс: последний подход можно перезаказать на помосте
+$canReOrderLast = $current
+    && $allowLastReorder
+    && $scoring === 'weight'
+    && $currentAttemptNo >= $attemptsAllowed
+    && $currentAttemptNo >= 2;
+$canOrder = $canOrderNext || $canReOrderLast;
+$orderTargetAttempt = $canOrderNext ? $nextAttempt : $currentAttemptNo;
+$orderIsReorder = $canReOrderLast && !$canOrderNext;
 $orderPid = (int) ($orderPid ?? 0);
 $orderAttempt = (int) ($orderAttempt ?? 0);
 $orderBase = $orderBase ?? null;
@@ -290,9 +302,13 @@ $hasStage = $current || $autoOrder;
                   <button class="platform-btn-confirm" type="submit" id="btnConfirm" disabled>
                     Зафиксировать результат
                   </button>
-                  <?php if ($canOrderNext && !$autoOrder): ?>
+                  <?php if ($canOrder && !$autoOrder): ?>
                     <button class="platform-btn-order" type="button" id="btnOrder">
-                      ↗ Попытка #<?= $nextAttempt ?>
+                      <?php if ($orderIsReorder): ?>
+                        ↻ Перезаказать #<?= $orderTargetAttempt ?>
+                      <?php else: ?>
+                        ↗ Попытка #<?= $orderTargetAttempt ?>
+                      <?php endif; ?>
                     </button>
                   <?php elseif ($nextHref): ?>
                     <a class="platform-btn-order" href="<?= htmlspecialchars($nextHref) ?>">Следующий →</a>
@@ -328,23 +344,26 @@ $hasStage = $current || $autoOrder;
 
           </div>
 
-          <?php if ($canOrderNext): ?>
+          <?php if ($canOrder): ?>
             <dialog id="orderModal" class="w-[min(28rem,calc(100%-2rem))] rounded-lg border border-line bg-paper p-0 text-ink shadow-xl" aria-labelledby="orderModalLabel">
               <form method="post" action="<?= htmlspecialchars($base) ?>/judge/order" class="flex flex-col">
                 <input type="hidden" name="from" value="protocol">
                 <div class="flex items-center justify-between gap-3 border-b border-line px-4 py-3">
                   <h2 class="text-lg font-semibold" id="orderModalLabel">
-                    Заказ веса · попытка #<?= $nextAttempt ?>
+                    <?= $orderIsReorder ? 'Перезаказ веса' : 'Заказ веса' ?> · попытка #<?= $orderTargetAttempt ?>
                   </h2>
                   <button type="button" class="text-2xl leading-none text-muted hover:text-ink" data-close-dialog aria-label="Закрыть">×</button>
                 </div>
                 <div class="px-4 py-3">
                   <input type="hidden" name="participant_id" value="<?= (int) $current['participant_id'] ?>">
                   <input type="hidden" name="discipline_id" value="<?= $did ?>">
-                  <input type="hidden" name="attempt_no" value="<?= $nextAttempt ?>">
+                  <input type="hidden" name="attempt_no" value="<?= $orderTargetAttempt ?>">
                   <p class="mb-3 text-sm text-muted">
                     <?= htmlspecialchars($current['full_name']) ?> · сейчас
                     <?= htmlspecialchars($weightFmt($current['declared_weight'])) ?> <?= htmlspecialchars($unit) ?>
+                    <?php if ($orderIsReorder): ?>
+                      <br><span class="text-xs">Можно изменить вес последнего подхода до фиксации</span>
+                    <?php endif; ?>
                   </p>
                   <label class="field-label" for="order_weight">Вес</label>
                   <div class="platform-order-stepper mb-2">
@@ -363,7 +382,7 @@ $hasStage = $current || $autoOrder;
                 </div>
                 <div class="flex justify-end gap-2 border-t border-line px-4 py-3">
                   <button type="button" class="btn-secondary" data-close-dialog>Отмена</button>
-                  <button type="submit" class="btn-primary">Заказать</button>
+                  <button type="submit" class="btn-primary"><?= $orderIsReorder ? 'Перезаказать' : 'Заказать' ?></button>
                 </div>
               </form>
             </dialog>
